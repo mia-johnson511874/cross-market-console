@@ -106,6 +106,7 @@ export default function App() {
             livePrice={grid.livePrice}
             liveChangePct={grid.liveChangePct}
             isOnline={grid.isOnline}
+            isSimulated={grid.isSimulated}
           />
 
           <div className="panel-divider" />
@@ -123,6 +124,7 @@ export default function App() {
             livePrice={option.livePrice}
             liveChangePct={option.liveChangePct}
             isOnline={option.isOnline}
+            isSimulated={option.isSimulated}
           />
         </div>
 

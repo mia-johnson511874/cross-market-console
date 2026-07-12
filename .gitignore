@@ -32,3 +32,6 @@ venv/
 
 # Render
 .rendered/
+
+# Local Netlify folder
+.netlify

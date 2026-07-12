@@ -28,6 +28,7 @@ export function useGrid(
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(false);
+  const [isSimulated, setIsSimulated] = useState<boolean>(false);
   const productRef = useRef(product);
   productRef.current = product;
 
@@ -39,12 +40,14 @@ export function useGrid(
     const poll = async () => {
       const snapshot = await fetchGridSnapshot(productRef.current.id);
       if (!mounted) return;
-      if (snapshot && snapshot.live_price !== null && !snapshot.error) {
+      if (snapshot && snapshot.live_price !== null) {
         setLivePrice(snapshot.live_price);
         setLiveChangePct(snapshot.change_pct ?? null);
         setIsOnline(true);
+        setIsSimulated(snapshot.simulated === true);
       } else {
         setIsOnline(false);
+        setIsSimulated(false);
       }
     };
 
@@ -145,6 +148,7 @@ export function useGrid(
     livePrice,
     liveChangePct,
     isOnline,
+    isSimulated,
     moveDown,
     moveUp,
     reset,

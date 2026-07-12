@@ -19,6 +19,7 @@ interface GridPanelProps {
   livePrice?: number | null;
   liveChangePct?: number | null;
   isOnline?: boolean;
+  isSimulated?: boolean;
 }
 
 // 按类别分组
@@ -46,6 +47,7 @@ export default function GridPanel({
   livePrice,
   liveChangePct,
   isOnline,
+  isSimulated,
 }: GridPanelProps) {
   const gridLines = getGridLines(selectedProduct, state);
 
@@ -93,9 +95,14 @@ export default function GridPanel({
           )}
         </div>
       )}
-      {isOnline === false && (
+      {isSimulated && (
+        <div className="simulated-banner">
+          📡 模拟实时数据 — 后端 API 未连接，显示模拟动态价格
+        </div>
+      )}
+      {isOnline === false && !isSimulated && (
         <div className="offline-banner">
-          ⚠️ 离线模式 — 显示默认价格，后端 API 未连接
+          ⚠️ 离线模式 — 无法获取数据
         </div>
       )}
 

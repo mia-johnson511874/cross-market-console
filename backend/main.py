@@ -10,11 +10,18 @@ import time
 
 from eastmoney_client import get_etf_snapshot, get_etf_snapshots_batch
 from simulated_data import get_simulated_snapshot
-from akshare_client import (
-    get_etf_history,
-    get_option_list_sse,
-    get_option_current_day_sse,
-)
+
+# akshare 为可选依赖，PythonAnywhere 可能安装失败
+try:
+    from akshare_client import (
+        get_etf_history,
+        get_option_list_sse,
+        get_option_current_day_sse,
+    )
+    _has_akshare = True
+except ImportError:
+    _has_akshare = False
+    print("WARNING: akshare not installed, using simulated data only")
 
 app = FastAPI(title="跨市场策略控制台 API", version="1.0.0")
 

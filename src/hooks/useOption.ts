@@ -23,6 +23,7 @@ export function useOption(
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(false);
+  const [isSimulated, setIsSimulated] = useState<boolean>(false);
   const productRef = useRef(product);
   productRef.current = product;
 
@@ -37,12 +38,14 @@ export function useOption(
       if (gridId) {
         const snapshot = await fetchGridSnapshot(gridId);
         if (!mounted) return;
-        if (snapshot && snapshot.live_price !== null && !snapshot.error) {
+        if (snapshot && snapshot.live_price !== null) {
           setLivePrice(snapshot.live_price);
           setLiveChangePct(snapshot.change_pct ?? null);
           setIsOnline(true);
+          setIsSimulated(snapshot.simulated === true);
         } else {
           setIsOnline(false);
+          setIsSimulated(false);
         }
       }
     };
@@ -158,6 +161,7 @@ export function useOption(
     livePrice,
     liveChangePct,
     isOnline,
+    isSimulated,
     moveDown,
     moveUp,
     timePass,

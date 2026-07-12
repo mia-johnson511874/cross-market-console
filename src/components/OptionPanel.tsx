@@ -24,6 +24,7 @@ interface OptionPanelProps {
   livePrice?: number | null;
   liveChangePct?: number | null;
   isOnline?: boolean;
+  isSimulated?: boolean;
 }
 
 // 按市场类型分组
@@ -50,6 +51,7 @@ export default function OptionPanel({
   livePrice,
   liveChangePct,
   isOnline,
+  isSimulated,
 }: OptionPanelProps) {
   const marketStatus = getMarketStatus(state);
 
@@ -97,9 +99,14 @@ export default function OptionPanel({
           )}
         </div>
       )}
-      {isOnline === false && (
+      {isSimulated && (
+        <div className="simulated-banner">
+          📡 模拟实时数据 — 显示模拟动态价格
+        </div>
+      )}
+      {isOnline === false && !isSimulated && (
         <div className="offline-banner">
-          ⚠️ 离线模式 — 显示默认价格
+          ⚠️ 离线模式 — 无法获取数据
         </div>
       )}
 
