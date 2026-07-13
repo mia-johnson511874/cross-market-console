@@ -24,6 +24,7 @@ export function useOption(
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
+  const [dataSource, setDataSource] = useState<string | undefined>(undefined);
   const productRef = useRef(product);
   productRef.current = product;
 
@@ -43,9 +44,11 @@ export function useOption(
           setLiveChangePct(snapshot.change_pct ?? null);
           setIsOnline(true);
           setIsSimulated(snapshot.simulated === true);
+          setDataSource(snapshot.source ?? undefined);
         } else {
           setIsOnline(false);
           setIsSimulated(false);
+          setDataSource(undefined);
         }
       }
     };
@@ -162,6 +165,7 @@ export function useOption(
     liveChangePct,
     isOnline,
     isSimulated,
+    dataSource,
     moveDown,
     moveUp,
     timePass,

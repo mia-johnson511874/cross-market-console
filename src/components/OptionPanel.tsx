@@ -25,6 +25,7 @@ interface OptionPanelProps {
   liveChangePct?: number | null;
   isOnline?: boolean;
   isSimulated?: boolean;
+  dataSource?: string;
 }
 
 // 按市场类型分组
@@ -52,6 +53,7 @@ export default function OptionPanel({
   liveChangePct,
   isOnline,
   isSimulated,
+  dataSource,
 }: OptionPanelProps) {
   const marketStatus = getMarketStatus(state);
 
@@ -99,14 +101,22 @@ export default function OptionPanel({
           )}
         </div>
       )}
-      {isSimulated && (
-        <div className="simulated-banner">
-          📡 模拟实时数据 — 显示模拟动态价格
+      {isOnline === false && (
+        <div className="offline-banner">
+          🔌 离线模式 — 网络不可用，无法获取实时行情
         </div>
       )}
-      {isOnline === false && !isSimulated && (
-        <div className="offline-banner">
-          ⚠️ 离线模式 — 无法获取数据
+      {isOnline !== false && isSimulated && (
+        <div className="simulated-banner">
+          📡 <span className="simulated-label">模拟数据</span>
+          <span className="simulated-reason">— {dataSource === 'frontend_simulated' ? '后端服务未连接，本地生成模拟行情' : '真实数据源连接失败，已自动切换至模拟行情'}</span>
+          <span className="simulated-hint">提示: 数据仅供演示，非真实交易价格</span>
+        </div>
+      )}
+      {isOnline !== false && !isSimulated && dataSource && (
+        <div className="live-banner">
+          ✅ <span className="live-label">实时行情</span>
+          <span className="live-source">— 数据来源: {dataSource === 'eastmoney' ? '东方财富' : dataSource === 'akshare' ? 'akshare' : dataSource}</span>
         </div>
       )}
 

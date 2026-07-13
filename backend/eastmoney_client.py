@@ -8,10 +8,12 @@ import ssl
 import time
 import urllib.request
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
 BASE_URL = "https://push2.eastmoney.com/api/qt/stock/get"
+BATCH_URL = "https://push2.eastmoney.com/api/qt/ulist.np/get"
 
 # 缓存最近的成功请求结果，避免重复请求
 _cache: dict[str, dict] = {}
@@ -35,7 +37,7 @@ def _fetch_via_urllib(secid: str, fields: str) -> Optional[dict]:
                 "Referer": "https://quote.eastmoney.com/",
             },
         )
-        resp = opener.open(req, timeout=4)
+        resp = opener.open(req, timeout=2)
         return json.loads(resp.read())
     except Exception:
         return None
@@ -55,7 +57,7 @@ def _fetch_via_requests(secid: str, fields: str) -> Optional[dict]:
                 ),
                 "Referer": "https://quote.eastmoney.com/",
             },
-            timeout=4,
+            timeout=2,
             proxies={"http": None, "https": None},  # 显式禁用代理
         )
         resp.raise_for_status()
@@ -64,7 +66,7 @@ def _fetch_via_requests(secid: str, fields: str) -> Optional[dict]:
         return None
 
 
-def _fetch_with_retry(secid: str, fields: str, max_retries: int = 2) -> Optional[dict]:
+def _fetch_with_retry(secid: str, fields: str, max_retries: int = 1) -> Optional[dict]:
     """带重试的双通道获取 (短超时，快速失败)"""
     for attempt in range(max_retries):
         result = _fetch_via_urllib(secid, fields)
@@ -138,14 +140,131 @@ def get_etf_snapshot(code: str, market: str = "1") -> dict:
     return {k: v for k, v in parsed.items() if k != "_ts"}
 
 
-def get_etf_snapshots_batch(codes: list[dict]) -> list[dict]:
-    """批量获取 ETF 快照"""
+def _fetch_batch_via_urllib(secids: str, fields: str) -> Optional[dict]:
+    """通过 urllib 获取东方财富批量行情"""
+    try:
+        ctx = ssl.create_default_context()
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        url = f"{BATCH_URL}?fltt=2&invt=2&fields={fields}&secids={secids}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Referer": "https://quote.eastmoney.com/",
+            },
+        )
+        resp = opener.open(req, timeout=3)
+        return json.loads(resp.read())
+    except Exception:
+        return None
+
+
+def _fetch_batch_via_requests(secids: str, fields: str) -> Optional[dict]:
+    """通过 requests 获取东方财富批量行情"""
+    try:
+        resp = requests.get(
+            BATCH_URL,
+            params={"fltt": "2", "invt": "2", "fields": fields, "secids": secids},
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Referer": "https://quote.eastmoney.com/",
+            },
+            timeout=3,
+            proxies={"http": None, "https": None},
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
+def _fetch_batch_with_retry(secids: str, fields: str, max_retries: int = 1) -> Optional[dict]:
+    """带重试的批量行情获取"""
+    for attempt in range(max_retries):
+        result = _fetch_batch_via_urllib(secids, fields)
+        if result and result.get("rc") == 0 and result.get("data"):
+            return result
+
+        result = _fetch_batch_via_requests(secids, fields)
+        if result and result.get("rc") == 0 and result.get("data"):
+            return result
+
+        if attempt < max_retries - 1:
+            time.sleep(0.3)
+    return None
+
+
+def _parse_batch_snapshot(item: dict) -> dict:
+    """解析 ulist.np 批量接口返回的单条数据"""
+    return {
+        "price": item.get("f2"),
+        "high": item.get("f15"),
+        "low": item.get("f16"),
+        "open": item.get("f17"),
+        "volume": item.get("f5"),
+        "turnover": item.get("f6"),
+        "name": item.get("f14", ""),
+        "prev_close": item.get("f18"),
+        "change_pct": item.get("f3", 0),
+        "code": item.get("f12"),
+        "market": str(item.get("f13", "1")),
+    }
+
+
+def get_etf_snapshots_batch_eastmoney(codes: list[dict]) -> list[dict]:
+    """
+    通过东方财富批量接口一次获取多只 ETF 快照。
+    比单只轮询快一个数量级。
+    """
+    if not codes:
+        return []
+
+    secids = ",".join(f"{item.get('market', '1')}.{item['code']}" for item in codes)
+    fields = "f12,f13,f14,f2,f3,f4,f5,f6,f15,f16,f17,f18"
+    result = _fetch_batch_with_retry(secids, fields)
+
+    if result is None:
+        return [{"code": item["code"], "error": "Network error"} for item in codes]
+
+    diff = result.get("data", {}).get("diff", [])
+    parsed = {item.get("f12"): _parse_batch_snapshot(item) for item in diff if item.get("f12")}
+
     results = []
     for item in codes:
-        result = get_etf_snapshot(item["code"], item.get("market", "1"))
-        result["code"] = item["code"]
-        results.append(result)
-        time.sleep(0.15)  # 节流
+        code = item["code"]
+        if code in parsed:
+            snap = parsed[code]
+            snap["source"] = "eastmoney"
+            results.append(snap)
+        else:
+            results.append({"code": code, "error": f"Code {code} not found in batch response"})
+    return results
+
+
+def get_etf_snapshots_batch(codes: list[dict], max_workers: int = 8) -> list[dict]:
+    """批量获取 ETF 快照（并发单只接口，备用）"""
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_code = {
+            executor.submit(get_etf_snapshot, item["code"], item.get("market", "1")): item
+            for item in codes
+        }
+        for future in as_completed(future_to_code):
+            item = future_to_code[future]
+            try:
+                result = future.result()
+            except Exception:
+                result = {"error": f"Failed to fetch {item['code']}"}
+            result["code"] = item["code"]
+            results.append(result)
     return results
 
 

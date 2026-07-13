@@ -2,7 +2,7 @@
 // 优先从后端 API 获取实时行情，后端不可用时使用内置模拟数据
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
-const FETCH_TIMEOUT = 4000;
+const FETCH_TIMEOUT = 15000;
 
 // ============ 内置模拟实时数据 ============
 
@@ -57,6 +57,7 @@ function generateSimulatedSnapshot(id: string): LiveSnapshot {
     low: Math.round(livePrice * (1 - Math.abs(changePct) / 200) * 1000) / 1000,
     volume: Math.floor(rng * 100000000),
     simulated: true,
+    source: 'frontend_simulated',
   };
 }
 
@@ -74,6 +75,7 @@ export interface LiveSnapshot {
   volume?: number | null;
   error?: string | null;
   simulated?: boolean;
+  source?: string;
 }
 
 export interface GridProductResponse extends LiveSnapshot {
@@ -159,4 +161,33 @@ export async function checkHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ============ 数据源诊断 ============
+
+export interface DataSourceStatus {
+  available: boolean;
+  latency_ms: number;
+}
+
+export interface DataSourcesResponse {
+  sources: Record<string, DataSourceStatus>;
+  any_real_data: boolean;
+  mode: 'live' | 'simulated';
+  checked_at: string;
+}
+
+/**
+ * 获取数据源诊断信息
+ * 用于显示当前数据来源状态
+ */
+export async function fetchDataSources(): Promise<DataSourcesResponse | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(`${API_BASE}/data-sources`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (resp.ok) return await resp.json();
+  } catch { /* backend not available */ }
+  return null;
 }

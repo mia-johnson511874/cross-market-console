@@ -1,6 +1,6 @@
 // 跨市场策略控制台 - 主应用
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import GridPanel from './components/GridPanel';
 import OptionPanel from './components/OptionPanel';
 import CrossPairNotice from './components/CrossPairNotice';
@@ -11,11 +11,15 @@ import { optionProducts } from './data/optionProducts';
 import { findCrossPair } from './data/crossPairs';
 import { useGrid, type TradeLogEntry } from './hooks/useGrid';
 import { useOption } from './hooks/useOption';
+import { fetchDataSources, type DataSourcesResponse } from './services/marketData';
 import './App.css';
 
 export default function App() {
   // 交易日志
   const [logs, setLogs] = useState<TradeLogEntry[]>([]);
+
+  // 数据源状态
+  const [dataSources, setDataSources] = useState<DataSourcesResponse | null>(null);
 
   const addLog = useCallback(
     (entry: Omit<TradeLogEntry, 'id'>) => {
@@ -54,6 +58,15 @@ export default function App() {
     },
     [option]
   );
+
+  // 数据源检测
+  useEffect(() => {
+    fetchDataSources().then(setDataSources);
+    const interval = setInterval(() => {
+      fetchDataSources().then(setDataSources);
+    }, 30000); // 30秒刷新一次
+    return () => clearInterval(interval);
+  }, []);
 
   // 查找配对关系
   const crossPair = useMemo(
@@ -107,6 +120,7 @@ export default function App() {
             liveChangePct={grid.liveChangePct}
             isOnline={grid.isOnline}
             isSimulated={grid.isSimulated}
+            dataSource={grid.dataSource}
           />
 
           <div className="panel-divider" />
@@ -125,6 +139,7 @@ export default function App() {
             liveChangePct={option.liveChangePct}
             isOnline={option.isOnline}
             isSimulated={option.isSimulated}
+            dataSource={option.dataSource}
           />
         </div>
 
@@ -145,6 +160,9 @@ export default function App() {
           optionState={option.state}
           isPaired={isPaired}
           isCrossProduct={isCrossProduct}
+          dataSources={dataSources}
+          gridOnline={grid.isOnline}
+          optionOnline={option.isOnline}
         />
 
         {/* 交易记录 */}
@@ -152,7 +170,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <span>仅供学习与研究使用 | 模拟数据，非真实行情 | 投资有风险，入市需谨慎</span>
+        <span>仅供学习与研究使用 | {dataSources?.mode === 'live' ? '✅ 实时行情' : '📡 模拟数据'} | 投资有风险，入市需谨慎</span>
       </footer>
     </div>
   );
