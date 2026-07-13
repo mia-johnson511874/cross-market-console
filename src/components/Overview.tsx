@@ -105,12 +105,14 @@ export default function Overview({
         {dataSources?.sources && (
           <div className="overview-item">
             <span className="ov-label">主数据源</span>
-            <span className={`ov-value ${dataSources.sources.eastmoney?.available ? 'pnl-positive' : ''}`}>
+            <span className={`ov-value ${dataSources.sources.eastmoney?.available || dataSources.sources.yfinance?.available ? 'pnl-positive' : ''}`}>
               {dataSources.sources.eastmoney?.available
                 ? `东方财富 (${dataSources.sources.eastmoney.latency_ms}ms)`
-                : dataSources.sources.akshare_etf?.available
-                  ? `akshare (${dataSources.sources.akshare_etf.latency_ms}ms)`
-                  : '无可用数据源'}
+                : dataSources.sources.yfinance?.available
+                  ? `Yahoo Finance (${dataSources.sources.yfinance.latency_ms}ms)`
+                  : dataSources.sources.akshare_etf?.available
+                    ? `akshare (${dataSources.sources.akshare_etf.latency_ms}ms)`
+                    : '无可用数据源'}
             </span>
           </div>
         )}
@@ -150,17 +152,27 @@ export default function Overview({
         <div className="data-source-detail">
           <h4>🔍 数据源详情</h4>
           <div className="source-grid">
-            {Object.entries(dataSources.sources).map(([key, src]) => (
-              <div key={key} className={`source-item ${src.available ? 'source-ok' : 'source-fail'}`}>
-                <span className="source-name">{key}</span>
-                <span className="source-status">
-                  {src.available ? '✅' : '❌'}
-                </span>
-                <span className="source-latency">
-                  {src.latency_ms > 0 ? `${src.latency_ms}ms` : '—'}
-                </span>
-              </div>
-            ))}
+            {Object.entries(dataSources.sources).map(([key, src]) => {
+              const names: Record<string, string> = {
+                eastmoney: '东方财富',
+                yfinance: 'Yahoo Finance',
+                akshare_etf: 'akshare ETF',
+                akshare_futures: 'akshare 期货',
+                akshare_hk_index: 'akshare 港股',
+                akshare_options: 'akshare 期权',
+              };
+              return (
+                <div key={key} className={`source-item ${src.available ? 'source-ok' : 'source-fail'}`}>
+                  <span className="source-name">{names[key] || key}</span>
+                  <span className="source-status">
+                    {src.available ? '✅' : '❌'}
+                  </span>
+                  <span className="source-latency">
+                    {src.latency_ms > 0 ? `${src.latency_ms}ms` : '—'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

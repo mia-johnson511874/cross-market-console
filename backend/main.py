@@ -2,7 +2,7 @@
 跨市场策略控制台 - 后端 API 服务
 提供实时行情数据接口
 
-数据源优先级: 东方财富 → akshare → 模拟数据
+数据源优先级: 东方财富 → Yahoo Finance → akshare → 模拟数据
 """
 
 from fastapi import FastAPI, Query
@@ -21,6 +21,15 @@ from simulated_data import get_simulated_snapshot
 # ---- 可选/分层导入 ----
 # 东方财富直连 — 这个是主要的实时数据源，必须可用
 _has_eastmoney = True  # eastmoney_client 总是可用
+
+# Yahoo Finance — 海外环境备用数据源
+try:
+    from yfinance_client import get_etf_snapshot_yfinance, check_yfinance_availability
+    _has_yfinance = True
+    logger.info("Yahoo Finance client loaded successfully")
+except ImportError:
+    _has_yfinance = False
+    logger.warning("yfinance not installed — fallback to akshare/simulated")
 
 # akshare — 可选增强数据源 (期货、期权链、港股指数)
 try:
@@ -147,28 +156,35 @@ def _check_eastmoney_quick(max_retries: int = 2) -> bool:
 def _fetch_etf_snapshot_with_fallback(code: str, market: str) -> dict:
     """
     获取 ETF 快照，带多级回退:
-      1. 东方财富 API (主)
-      2. akshare 接口 (备)
-      3. 模拟数据 (兜底)
+      1. 东方财富 API (主，国内环境)
+      2. Yahoo Finance (备，海外环境)
+      3. akshare 接口 (增强)
+      4. 模拟数据 (兜底)
     """
     # 第1级: 东方财富 (仅当全局检测可用时才尝试，避免每个请求都超时)
     if _check_eastmoney_quick():
         snap = get_etf_snapshot(code, market)
         if "error" not in snap:
             snap["source"] = "eastmoney"
-            # 成功后更新全局可用性缓存
             global _eastmoney_available_cache
             _eastmoney_available_cache = True
             return snap
 
-    # 第2级: akshare
+    # 第2级: Yahoo Finance (海外环境备用)
+    if _has_yfinance:
+        snap = get_etf_snapshot_yfinance(code)
+        if "error" not in snap:
+            snap["source"] = "yfinance"
+            return snap
+
+    # 第3级: akshare
     if _has_akshare:
         snap = get_etf_realtime_snapshot_akshare(code)
         if "error" not in snap:
             snap["source"] = "akshare"
             return snap
 
-    # 第3级: 模拟数据
+    # 第4级: 模拟数据
     snap = get_simulated_snapshot(code)
     snap["source"] = "simulated"
     return snap
@@ -218,6 +234,7 @@ def health_check():
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "akshare_available": _has_akshare,
         "eastmoney_available": _has_eastmoney,
+        "yfinance_available": _has_yfinance,
     }
 
 
@@ -229,6 +246,7 @@ def check_data_sources():
     """
     results = {
         "eastmoney": {"available": False, "latency_ms": 0},
+        "yfinance": {"available": False, "latency_ms": 0},
         "akshare_etf": {"available": False, "latency_ms": 0},
         "akshare_futures": {"available": False, "latency_ms": 0},
         "akshare_hk_index": {"available": False, "latency_ms": 0},
@@ -243,6 +261,10 @@ def check_data_sources():
         "latency_ms": round((time.time() - t0) * 1000),
     }
 
+    # 测试 Yahoo Finance
+    if _has_yfinance:
+        results["yfinance"] = check_yfinance_availability()
+
     # 测试 akshare 各子模块
     if _has_akshare:
         akshare_status = check_akshare_availability()
@@ -254,6 +276,7 @@ def check_data_sources():
     # 汇总: 是否有任何真实数据源可用
     any_real = (
         results["eastmoney"]["available"]
+        or results["yfinance"]["available"]
         or results["akshare_etf"]["available"]
     )
 
@@ -286,7 +309,7 @@ def _build_grid_product(product: dict, snap: dict) -> dict:
 def list_grid_products():
     """
     返回所有 ETF 网格品种及其实时价格
-    优先东方财富批量接口，不可用时回退 akshare，最终兜底模拟数据
+    优先东方财富批量接口，不可用时回退 Yahoo Finance，再回退 akshare，最终兜底模拟数据
     """
     start = time.time()
     results: list[dict] = []
@@ -297,16 +320,21 @@ def list_grid_products():
         code_to_snap = {snap["code"]: snap for snap in batch if "code" in snap}
         results = [_build_grid_product(p, code_to_snap.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
     else:
-        # 第2级: akshare 全量 ETF 列表
-        if _has_akshare:
-            snaps = {p["code"]: get_etf_realtime_snapshot_akshare(p["code"]) for p in ETF_PRODUCTS}
+        # 第2级: Yahoo Finance (海外环境)
+        if _has_yfinance:
+            snaps = {p["code"]: get_etf_snapshot_yfinance(p["code"]) for p in ETF_PRODUCTS}
             results = [_build_grid_product(p, snaps.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
         else:
-            # 第3级: 模拟数据
-            results = [
-                _build_grid_product(p, {**get_simulated_snapshot(p["code"]), "source": "simulated"})
-                for p in ETF_PRODUCTS
-            ]
+            # 第3级: akshare 全量 ETF 列表
+            if _has_akshare:
+                snaps = {p["code"]: get_etf_realtime_snapshot_akshare(p["code"]) for p in ETF_PRODUCTS}
+                results = [_build_grid_product(p, snaps.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
+            else:
+                # 第4级: 模拟数据
+                results = [
+                    _build_grid_product(p, {**get_simulated_snapshot(p["code"]), "source": "simulated"})
+                    for p in ETF_PRODUCTS
+                ]
 
     elapsed = time.time() - start
     return {"products": results, "count": len(results), "elapsed_ms": round(elapsed * 1000)}
@@ -564,6 +592,7 @@ if __name__ == "__main__":
     print(f"    - 港股指数期权: {len(HK_OPTIONS)}")
     print(f"  数据源:")
     print(f"    - 东方财富 API: {'可用' if _has_eastmoney else '不可用'}")
+    print(f"    - Yahoo Finance: {'可用' if _has_yfinance else '不可用'}")
     print(f"    - akshare:     {'可用' if _has_akshare else '不可用'}")
     print(f"    - 模拟数据:     可用 (兜底)")
     print(f"  启动地址: http://0.0.0.0:{port}")
