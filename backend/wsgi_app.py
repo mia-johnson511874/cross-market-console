@@ -21,12 +21,18 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 from simulated_data import get_simulated_snapshot, BASE_PRICES
 from data import crossPairs
 
-# 尝试导入真实行情客户端 (PythonAnywhere 上大概率不可用)
+# 尝试导入真实行情客户端
 try:
     from eastmoney_client import get_etf_snapshot
     _has_eastmoney = True
 except Exception:
     _has_eastmoney = False
+
+try:
+    from yfinance_client import get_etf_snapshot_yfinance, check_yfinance_availability
+    _has_yfinance = True
+except Exception:
+    _has_yfinance = False
 
 try:
     from akshare_client import (
@@ -98,11 +104,17 @@ ALLOWED_ORIGINS = [
 # ==================== 数据获取 ====================
 
 def _fetch_etf_snapshot(code: str, market: str = "1") -> dict:
-    """获取 ETF 快照: 东方财富 → akshare → 模拟"""
+    """获取 ETF 快照: 东方财富 → Yahoo Finance → akshare → 模拟"""
     if _has_eastmoney:
         snap = get_etf_snapshot(code, market)
         if "error" not in snap:
             snap["source"] = "eastmoney"
+            return snap
+
+    if _has_yfinance:
+        snap = get_etf_snapshot_yfinance(code)
+        if "error" not in snap:
+            snap["source"] = "yfinance"
             return snap
 
     if _has_akshare:
@@ -150,12 +162,14 @@ def route_api(path: str, qs: str = "") -> tuple:
             "time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "akshare_available": _has_akshare,
             "eastmoney_available": _has_eastmoney,
+            "yfinance_available": _has_yfinance,
         })
 
     # GET /api/data-sources
     if len(parts) >= 2 and parts[0] == 'api' and parts[1] == 'data-sources':
         sources = {
             "eastmoney": {"available": False, "latency_ms": 0},
+            "yfinance": {"available": False, "latency_ms": 0},
             "akshare_etf": {"available": False, "latency_ms": 0},
             "akshare_futures": {"available": False, "latency_ms": 0},
             "akshare_hk_index": {"available": False, "latency_ms": 0},
@@ -168,6 +182,8 @@ def route_api(path: str, qs: str = "") -> tuple:
                 "available": "error" not in snap,
                 "latency_ms": round((time.time() - t0) * 1000),
             }
+        if _has_yfinance:
+            sources["yfinance"] = check_yfinance_availability()
         if _has_akshare:
             try:
                 from akshare_client import check_akshare_availability
@@ -179,7 +195,7 @@ def route_api(path: str, qs: str = "") -> tuple:
             except Exception:
                 pass
 
-        any_real = sources["eastmoney"]["available"] or sources["akshare_etf"]["available"]
+        any_real = sources["eastmoney"]["available"] or sources["yfinance"]["available"] or sources["akshare_etf"]["available"]
         return json_response({
             "sources": sources,
             "any_real_data": any_real,
