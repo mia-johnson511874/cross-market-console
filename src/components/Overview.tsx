@@ -109,7 +109,7 @@ export default function Overview({
               {dataSources.sources.eastmoney?.available
                 ? `东方财富 (${dataSources.sources.eastmoney.latency_ms}ms)`
                 : dataSources.sources.yfinance?.available
-                  ? `Yahoo Finance (${dataSources.sources.yfinance.latency_ms}ms)`
+                  ? `Yahoo Finance (美股映射, ${dataSources.sources.yfinance.latency_ms}ms)`
                   : dataSources.sources.akshare_etf?.available
                     ? `akshare (${dataSources.sources.akshare_etf.latency_ms}ms)`
                     : '无可用数据源'}

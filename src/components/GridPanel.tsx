@@ -112,7 +112,7 @@ export default function GridPanel({
       {isOnline !== false && !isSimulated && dataSource && (
         <div className="live-banner">
           ✅ <span className="live-label">实时行情</span>
-          <span className="live-source">— 数据来源: {dataSource === 'eastmoney' ? '东方财富' : dataSource === 'yfinance' ? 'Yahoo Finance' : dataSource === 'akshare' ? 'akshare' : dataSource}</span>
+          <span className="live-source">— 数据来源: {dataSource === 'eastmoney' ? '东方财富' : dataSource === 'yfinance' ? 'Yahoo Finance (美股映射)' : dataSource === 'akshare' ? 'akshare' : dataSource}</span>
         </div>
       )}
 

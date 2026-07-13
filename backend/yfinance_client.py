@@ -1,18 +1,9 @@
 import time
 import logging
 import requests
-import pandas as pd
 from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-_yf = None
-try:
-    import yfinance as yf
-    _yf = yf
-    logger.info("yfinance module loaded successfully")
-except ImportError:
-    logger.warning("yfinance not installed — Yahoo Finance data source unavailable")
 
 _cache: dict[str, dict] = {}
 _cache_ttl = 60
@@ -40,6 +31,11 @@ ETF_SYMBOL_MAP: dict[str, str] = {
     "159980": "VTI",
 }
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
+
 
 def _cached(key: str):
     entry = _cache.get(key)
@@ -54,42 +50,30 @@ def _set_cache(key: str, data: dict):
     return {k: v for k, v in data.items() if k != "_ts"}
 
 
-def get_etf_snapshot_yfinance(code: str) -> dict:
-    if _yf is None:
-        return {"error": "yfinance not installed"}
-
-    cache_key = f"yf_{code}"
-    cached = _cached(cache_key)
-    if cached:
-        return cached
-
-    symbol = ETF_SYMBOL_MAP.get(code, code)
-
+def _fetch_yahoo_finance(symbol: str) -> dict:
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?region=US&lang=en-US&includePrePost=false&interval=1m&range=1d&corsDomain=finance.yahoo.com&formatted=false"
     try:
         time.sleep(0.3)
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        result = data.get("chart", {}).get("result", [])
+        if not result:
+            return {"error": "No data returned"}
 
-        ticker = _yf.Ticker(symbol)
-        hist = ticker.history(period="1d", interval="1m")
+        meta = result[0].get("meta", {})
+        price = meta.get("regularMarketPrice")
+        if price is None:
+            return {"error": "No price data"}
 
-        if hist.empty:
-            hist = ticker.history(period="1d")
-            if hist.empty:
-                hist = ticker.history(period="5d")
-                if hist.empty:
-                    return {"error": f"No data for {code} ({symbol})"}
-
-        price = hist["Close"].iloc[-1]
-        prev_close = hist["Open"].iloc[0] if len(hist) > 0 else price
-        high = hist["High"].max() if len(hist) > 0 else price
-        low = hist["Low"].min() if len(hist) > 0 else price
-        volume = hist["Volume"].iloc[-1] if len(hist) > 0 else 0
-
+        high = meta.get("regularMarketDayHigh", price)
+        low = meta.get("regularMarketDayLow", price)
+        volume = meta.get("regularMarketVolume", 0)
+        prev_close = meta.get("previousClose", price)
+        name = meta.get("longName", meta.get("shortName", symbol))
         change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
 
-        info = ticker.info
-        name = info.get("shortName", info.get("longName", code)) if info else code
-
-        result = {
+        return {
             "price": round(float(price), 3),
             "high": round(float(high), 3),
             "low": round(float(low), 3),
@@ -100,78 +84,33 @@ def get_etf_snapshot_yfinance(code: str) -> dict:
             "change_pct": round(change_pct, 2),
             "source": "yfinance",
         }
-        return _set_cache(cache_key, result)
-
+    except requests.RequestException as e:
+        logger.warning(f"Yahoo Finance request failed for {symbol}: {e}")
+        return {"error": str(e)}
     except Exception as e:
-        logger.warning(f"yfinance fetch failed for {code}: {e}")
+        logger.warning(f"Yahoo Finance parse failed for {symbol}: {e}")
         return {"error": str(e)}
 
 
+def get_etf_snapshot_yfinance(code: str) -> dict:
+    cache_key = f"yf_{code}"
+    cached = _cached(cache_key)
+    if cached:
+        return cached
+
+    symbol = ETF_SYMBOL_MAP.get(code, code)
+    result = _fetch_yahoo_finance(symbol)
+    if "error" not in result:
+        return _set_cache(cache_key, result)
+    return result
+
+
 def get_etf_snapshots_batch_yfinance(codes: list[str]) -> dict[str, dict]:
-    if _yf is None:
-        return {code: {"error": "yfinance not installed"} for code in codes}
-
-    symbols = [ETF_SYMBOL_MAP.get(c, c) for c in codes]
-    unique_symbols = list(set(symbols))
-
-    try:
-        time.sleep(0.5)
-
-        data = _yf.download(unique_symbols, period="1d", interval="1m", progress=False)
-
-        results: dict[str, dict] = {}
-        if isinstance(data.columns, pd.MultiIndex):
-            for code, symbol in zip(codes, symbols):
-                if symbol in data.columns.get_level_values(0):
-                    hist = data[symbol]
-                    if not hist.empty:
-                        price = hist["Close"].iloc[-1]
-                        prev_close = hist["Open"].iloc[0]
-                        high = hist["High"].max()
-                        low = hist["Low"].min()
-                        volume = hist["Volume"].iloc[-1]
-                        change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
-
-                        results[code] = {
-                            "price": round(float(price), 3),
-                            "high": round(float(high), 3),
-                            "low": round(float(low), 3),
-                            "open": round(float(prev_close), 3),
-                            "volume": int(volume),
-                            "prev_close": round(float(prev_close), 3),
-                            "change_pct": round(change_pct, 2),
-                            "source": "yfinance",
-                        }
-                        _set_cache(f"yf_{code}", results[code])
-                    else:
-                        results[code] = {"error": f"No data for {code}"}
-                else:
-                    results[code] = {"error": f"No data for {code}"}
-        elif not data.empty:
-            price = data["Close"].iloc[-1]
-            prev_close = data["Open"].iloc[0]
-            high = data["High"].max()
-            low = data["Low"].min()
-            volume = data["Volume"].iloc[-1]
-            change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
-
-            results[codes[0]] = {
-                "price": round(float(price), 3),
-                "high": round(float(high), 3),
-                "low": round(float(low), 3),
-                "open": round(float(prev_close), 3),
-                "volume": int(volume),
-                "prev_close": round(float(prev_close), 3),
-                "change_pct": round(change_pct, 2),
-                "source": "yfinance",
-            }
-            _set_cache(f"yf_{codes[0]}", results[codes[0]])
-
-        return results
-
-    except Exception as e:
-        logger.warning(f"yfinance batch fetch failed: {e}")
-        return {code: {"error": str(e)} for code in codes}
+    results: dict[str, dict] = {}
+    for code in codes:
+        result = get_etf_snapshot_yfinance(code)
+        results[code] = result
+    return results
 
 
 def check_yfinance_availability() -> dict:
@@ -183,5 +122,5 @@ def check_yfinance_availability() -> dict:
             "latency_ms": round((time.time() - t0) * 1000),
         }
     except Exception as e:
-        logger.warning(f"yfinance check failed: {e}")
+        logger.warning(f"Yahoo Finance check failed: {e}")
         return {"available": False, "latency_ms": round((time.time() - t0) * 1000)}
