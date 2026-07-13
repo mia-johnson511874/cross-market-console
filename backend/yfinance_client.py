@@ -1,9 +1,16 @@
-import yfinance as yf
 import time
 import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+_yf = None
+try:
+    import yfinance as yf
+    _yf = yf
+    logger.info("yfinance module loaded successfully")
+except ImportError:
+    logger.warning("yfinance not installed — Yahoo Finance data source unavailable")
 
 _cache: dict[str, dict] = {}
 _cache_ttl = 30
@@ -50,6 +57,9 @@ def get_etf_snapshot_yfinance(code: str) -> dict:
     通过 Yahoo Finance 获取 ETF 实时快照
     支持海外环境访问
     """
+    if _yf is None:
+        return {"error": "yfinance not installed"}
+
     cache_key = f"yf_{code}"
     cached = _cached(cache_key)
     if cached:
@@ -58,7 +68,7 @@ def get_etf_snapshot_yfinance(code: str) -> dict:
     symbol = ETF_SYMBOL_MAP.get(code, code)
 
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = _yf.Ticker(symbol)
         info = ticker.info
 
         if not info or "currentPrice" not in info:
