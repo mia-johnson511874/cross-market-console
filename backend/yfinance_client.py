@@ -43,44 +43,61 @@ def _fetch_yahoo_finance(symbol: str, market: str = "") -> dict:
     elif market == "0" and symbol.isdigit():
         yahoo_symbol = f"{symbol}.SZ"
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}?region=US&lang=en-US&includePrePost=false&interval=1m&range=1d&corsDomain=finance.yahoo.com&formatted=false"
-    try:
-        time.sleep(0.3)
-        resp = requests.get(url, headers=HEADERS, timeout=10, proxies=PROXIES)
-        resp.raise_for_status()
-        data = resp.json()
-        result = data.get("chart", {}).get("result", [])
-        if not result:
-            return {"error": "No data returned"}
+    
+    max_retries = 3
+    base_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            time.sleep(base_delay + attempt * 0.5)
+            resp = requests.get(url, headers=HEADERS, timeout=15, proxies=PROXIES)
+            
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Yahoo Finance rate limited for {symbol}, retrying in {base_delay * (attempt + 1)}s")
+                    time.sleep(base_delay * (attempt + 1))
+                    continue
+                else:
+                    return {"error": "Rate limited"}
+            
+            resp.raise_for_status()
+            data = resp.json()
+            result = data.get("chart", {}).get("result", [])
+            if not result:
+                return {"error": "No data returned"}
 
-        meta = result[0].get("meta", {})
-        price = meta.get("regularMarketPrice")
-        if price is None:
-            return {"error": "No price data"}
+            meta = result[0].get("meta", {})
+            price = meta.get("regularMarketPrice")
+            if price is None:
+                return {"error": "No price data"}
 
-        high = meta.get("regularMarketDayHigh", price)
-        low = meta.get("regularMarketDayLow", price)
-        volume = meta.get("regularMarketVolume", 0)
-        prev_close = meta.get("previousClose", price)
-        name = meta.get("longName", meta.get("shortName", symbol))
-        change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
+            high = meta.get("regularMarketDayHigh", price)
+            low = meta.get("regularMarketDayLow", price)
+            volume = meta.get("regularMarketVolume", 0)
+            prev_close = meta.get("previousClose", price)
+            name = meta.get("longName", meta.get("shortName", symbol))
+            change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
 
-        return {
-            "price": round(float(price), 3),
-            "high": round(float(high), 3),
-            "low": round(float(low), 3),
-            "open": round(float(prev_close), 3),
-            "volume": int(volume),
-            "name": name,
-            "prev_close": round(float(prev_close), 3),
-            "change_pct": round(change_pct, 2),
-            "source": "yfinance",
-        }
-    except requests.RequestException as e:
-        logger.warning(f"Yahoo Finance request failed for {symbol}: {e}")
-        return {"error": str(e)}
-    except Exception as e:
-        logger.warning(f"Yahoo Finance parse failed for {symbol}: {e}")
-        return {"error": str(e)}
+            return {
+                "price": round(float(price), 3),
+                "high": round(float(high), 3),
+                "low": round(float(low), 3),
+                "open": round(float(prev_close), 3),
+                "volume": int(volume),
+                "name": name,
+                "prev_close": round(float(prev_close), 3),
+                "change_pct": round(change_pct, 2),
+                "source": "yfinance",
+            }
+        except requests.RequestException as e:
+            logger.warning(f"Yahoo Finance request failed for {symbol} (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(base_delay * (attempt + 1))
+                continue
+            return {"error": str(e)}
+        except Exception as e:
+            logger.warning(f"Yahoo Finance parse failed for {symbol}: {e}")
+            return {"error": str(e)}
 
 
 def get_etf_snapshot_yfinance(code: str, market: str = "") -> dict:
