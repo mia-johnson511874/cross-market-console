@@ -340,9 +340,7 @@ export const gridProducts: GridProduct[] = [
       note: 'ETF跟踪有色金属期货指数（含铜铝锌铅镍锡），铜期权为单一品种近似对冲',
     },
   },
-];
 
-// ===== 美股ETF - 直连Yahoo Finance =====
   {
     id: 'us-cny',
     name: '人民币ETF',
