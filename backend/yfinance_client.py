@@ -27,8 +27,13 @@ def _set_cache(key: str, data: dict):
     return {k: v for k, v in data.items() if k != "_ts"}
 
 
-def _fetch_yahoo_finance(symbol: str) -> dict:
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?region=US&lang=en-US&includePrePost=false&interval=1m&range=1d&corsDomain=finance.yahoo.com&formatted=false"
+def _fetch_yahoo_finance(symbol: str, market: str = "") -> dict:
+    yahoo_symbol = symbol
+    if market == "1" and symbol.isdigit():
+        yahoo_symbol = f"{symbol}.SS"
+    elif market == "0" and symbol.isdigit():
+        yahoo_symbol = f"{symbol}.SZ"
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}?region=US&lang=en-US&includePrePost=false&interval=1m&range=1d&corsDomain=finance.yahoo.com&formatted=false"
     try:
         time.sleep(0.3)
         resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -69,22 +74,23 @@ def _fetch_yahoo_finance(symbol: str) -> dict:
         return {"error": str(e)}
 
 
-def get_etf_snapshot_yfinance(code: str) -> dict:
-    cache_key = f"yf_{code}"
+def get_etf_snapshot_yfinance(code: str, market: str = "") -> dict:
+    cache_key = f"yf_{code}_{market}"
     cached = _cached(cache_key)
     if cached:
         return cached
 
-    result = _fetch_yahoo_finance(code)
+    result = _fetch_yahoo_finance(code, market)
     if "error" not in result:
         return _set_cache(cache_key, result)
     return result
 
 
-def get_etf_snapshots_batch_yfinance(codes: list[str]) -> dict[str, dict]:
+def get_etf_snapshots_batch_yfinance(codes: list[str], markets: list[str] = None) -> dict[str, dict]:
     results: dict[str, dict] = {}
-    for code in codes:
-        result = get_etf_snapshot_yfinance(code)
+    for i, code in enumerate(codes):
+        market = markets[i] if markets else ""
+        result = get_etf_snapshot_yfinance(code, market)
         results[code] = result
     return results
 

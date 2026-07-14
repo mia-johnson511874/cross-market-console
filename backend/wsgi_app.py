@@ -18,6 +18,10 @@ from urllib.parse import parse_qs
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+# PythonAnywhere 代理设置
+os.environ['http_proxy'] = 'http://proxy.server:8080'
+os.environ['https_proxy'] = 'http://proxy.server:8080'
+
 from simulated_data import get_simulated_snapshot, BASE_PRICES
 from data import crossPairs
 
@@ -49,26 +53,33 @@ except Exception:
 
 # ---- ETF 品种配置 ----
 ETF_PRODUCTS = [
-    {"id": "a-hstech", "code": "513130", "market": "1", "name": "恒生科技ETF"},
-    {"id": "a-hsient", "code": "513220", "market": "1", "name": "恒生互联网ETF"},
-    {"id": "a-hsient2", "code": "513050", "market": "1", "name": "中概互联ETF"},
-    {"id": "a-hsi", "code": "159920", "market": "0", "name": "恒生ETF"},
-    {"id": "a-hsi2", "code": "510900", "market": "1", "name": "H股ETF"},
-    {"id": "a-hkstock50", "code": "513120", "market": "1", "name": "港股通50ETF"},
-    {"id": "a-hkfinance", "code": "513190", "market": "1", "name": "港股通金融ETF"},
-    {"id": "a-hstech2", "code": "513600", "market": "1", "name": "恒生科技指数ETF"},
-    {"id": "a-nasdaq", "code": "513100", "market": "1", "name": "纳指ETF"},
-    {"id": "a-sp500", "code": "513500", "market": "1", "name": "标普500ETF"},
-    {"id": "a-nasdaq2", "code": "159941", "market": "0", "name": "纳指ETF深"},
-    {"id": "a-nasdaq100", "code": "159659", "market": "0", "name": "纳斯达克100ETF"},
-    {"id": "a-nasdaq3", "code": "159632", "market": "0", "name": "纳斯达克ETF沪"},
-    {"id": "a-nikkei", "code": "159866", "market": "0", "name": "日经ETF"},
-    {"id": "a-germany", "code": "513030", "market": "1", "name": "德国ETF"},
-    {"id": "a-gold", "code": "518880", "market": "1", "name": "黄金ETF"},
-    {"id": "a-gold2", "code": "159937", "market": "0", "name": "黄金ETF深"},
-    {"id": "a-doupo", "code": "159985", "market": "0", "name": "豆粕ETF"},
-    {"id": "a-silver", "code": "161226", "market": "0", "name": "白银LOF"},
-    {"id": "a-metal", "code": "159980", "market": "0", "name": "有色金属ETF"},
+    {"id": "a-hstech", "code": "513130", "market": "1", "name": "恒生科技ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hsient", "code": "513220", "market": "1", "name": "恒生互联网ETF", "yf_symbol": "KWEB"},
+    {"id": "a-hsient2", "code": "513050", "market": "1", "name": "中概互联ETF", "yf_symbol": "KWEB"},
+    {"id": "a-hsi", "code": "159920", "market": "0", "name": "恒生ETF", "yf_symbol": "EWH"},
+    {"id": "a-hsi2", "code": "510900", "market": "1", "name": "H股ETF", "yf_symbol": "EWH"},
+    {"id": "a-hkstock50", "code": "513120", "market": "1", "name": "港股通50ETF", "yf_symbol": "EWH"},
+    {"id": "a-hkfinance", "code": "513190", "market": "1", "name": "港股通金融ETF", "yf_symbol": "EWH"},
+    {"id": "a-hstech2", "code": "513600", "market": "1", "name": "恒生科技指数ETF", "yf_symbol": "QQQ"},
+    {"id": "a-nasdaq", "code": "513100", "market": "1", "name": "纳指ETF", "yf_symbol": "QQQ"},
+    {"id": "a-sp500", "code": "513500", "market": "1", "name": "标普500ETF", "yf_symbol": "SPY"},
+    {"id": "a-nasdaq2", "code": "159941", "market": "0", "name": "纳指ETF深", "yf_symbol": "QQQ"},
+    {"id": "a-nasdaq100", "code": "159659", "market": "0", "name": "纳斯达克100ETF", "yf_symbol": "QQQ"},
+    {"id": "a-nasdaq3", "code": "159632", "market": "0", "name": "纳斯达克ETF沪", "yf_symbol": "QQQ"},
+    {"id": "a-nikkei", "code": "159866", "market": "0", "name": "日经ETF", "yf_symbol": "EWJ"},
+    {"id": "a-germany", "code": "513030", "market": "1", "name": "德国ETF", "yf_symbol": "EWG"},
+    {"id": "a-gold", "code": "518880", "market": "1", "name": "黄金ETF", "yf_symbol": "GLD"},
+    {"id": "a-gold2", "code": "159937", "market": "0", "name": "黄金ETF深", "yf_symbol": "GLD"},
+    {"id": "a-doupo", "code": "159985", "market": "0", "name": "豆粕ETF", "yf_symbol": "SOYB"},
+    {"id": "a-silver", "code": "161226", "market": "0", "name": "白银LOF", "yf_symbol": "SLV"},
+    {"id": "a-metal", "code": "159980", "market": "0", "name": "有色金属ETF", "yf_symbol": "COPX"},
+    {"id": "us-cny", "code": "CYB", "market": "US", "name": "人民币ETF", "yf_symbol": "CYB"},
+    {"id": "us-ashr", "code": "ASHR", "market": "US", "name": "沪深300ETF(美股)", "yf_symbol": "ASHR"},
+    {"id": "us-qqq", "code": "QQQ", "market": "US", "name": "纳指ETF(美股)", "yf_symbol": "QQQ"},
+    {"id": "us-spy", "code": "SPY", "market": "US", "name": "标普500ETF(美股)", "yf_symbol": "SPY"},
+    {"id": "us-ewh", "code": "EWH", "market": "US", "name": "恒生ETF(美股)", "yf_symbol": "EWH"},
+    {"id": "us-kweb", "code": "KWEB", "market": "US", "name": "中国互联网ETF(美股)", "yf_symbol": "KWEB"},
+    {"id": "us-cqqq", "code": "CQQQ", "market": "US", "name": "中国科技ETF(美股)", "yf_symbol": "CQQQ"},
 ]
 
 # 期权标的映射
@@ -103,7 +114,7 @@ ALLOWED_ORIGINS = [
 
 # ==================== 数据获取 ====================
 
-def _fetch_etf_snapshot(code: str, market: str = "1") -> dict:
+def _fetch_etf_snapshot(code: str, market: str = "1", yf_symbol: str = "") -> dict:
     """获取 ETF 快照: 东方财富 → Yahoo Finance → akshare → 模拟"""
     if _has_eastmoney:
         snap = get_etf_snapshot(code, market)
@@ -112,7 +123,8 @@ def _fetch_etf_snapshot(code: str, market: str = "1") -> dict:
             return snap
 
     if _has_yfinance:
-        snap = get_etf_snapshot_yfinance(code)
+        symbol_to_use = yf_symbol if yf_symbol else code
+        snap = get_etf_snapshot_yfinance(symbol_to_use, market)
         if "error" not in snap:
             snap["source"] = "yfinance"
             return snap
@@ -208,7 +220,7 @@ def route_api(path: str, qs: str = "") -> tuple:
         start = time.time()
         results = []
         for p in ETF_PRODUCTS:
-            snap = _fetch_etf_snapshot(p["code"], p["market"])
+            snap = _fetch_etf_snapshot(p["code"], p["market"], p.get("yf_symbol", ""))
             live_price = snap.get("price") if "error" not in snap else None
             results.append({
                 "id": p["id"], "code": p["code"], "name": p["name"],
@@ -235,7 +247,7 @@ def route_api(path: str, qs: str = "") -> tuple:
         if not product:
             return json_response({"error": "Unknown product", "id": product_id}, 404)
 
-        snap = _fetch_etf_snapshot(product["code"], product["market"])
+        snap = _fetch_etf_snapshot(product["code"], product["market"], product.get("yf_symbol", ""))
         return json_response({
             "id": product_id, "code": product["code"], "name": product["name"],
             "live_price": snap.get("price") if "error" not in snap else None,

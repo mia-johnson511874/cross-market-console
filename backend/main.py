@@ -187,7 +187,7 @@ def _fetch_etf_snapshot_with_fallback(code: str, market: str, yf_symbol: str = "
     # 第2级: Yahoo Finance (海外环境备用)
     if _has_yfinance:
         symbol_to_use = yf_symbol if yf_symbol else code
-        snap = get_etf_snapshot_yfinance(symbol_to_use)
+        snap = get_etf_snapshot_yfinance(symbol_to_use, market)
         if "error" not in snap:
             snap["source"] = "yfinance"
             return snap
@@ -341,7 +341,7 @@ def list_grid_products():
             snaps = {}
             for p in ETF_PRODUCTS:
                 yf_symbol = p.get("yf_symbol", p["code"])
-                snap = get_etf_snapshot_yfinance(yf_symbol)
+                snap = get_etf_snapshot_yfinance(yf_symbol, p["market"])
                 snaps[p["code"]] = snap
             results = [_build_grid_product(p, snaps.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
         else:
