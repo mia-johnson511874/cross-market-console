@@ -14,9 +14,12 @@ HEADERS = {
     "Accept": "application/json",
 }
 
+_proxy_http = os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY") or "http://proxy.server:3128"
+_proxy_https = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY") or "http://proxy.server:3128"
+
 PROXIES = {
-    "http": os.environ.get("http_proxy"),
-    "https": os.environ.get("https_proxy"),
+    "http": _proxy_http,
+    "https": _proxy_https,
 }
 
 
