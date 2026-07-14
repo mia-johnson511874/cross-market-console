@@ -18,10 +18,6 @@ from urllib.parse import parse_qs
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# PythonAnywhere 代理设置
-os.environ['http_proxy'] = 'http://proxy.server:8080'
-os.environ['https_proxy'] = 'http://proxy.server:8080'
-
 from simulated_data import get_simulated_snapshot, BASE_PRICES
 from data import crossPairs
 
