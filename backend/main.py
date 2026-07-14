@@ -367,7 +367,7 @@ def get_grid_product_snapshot(product_id: str):
     if not product:
         return {"error": "Unknown product", "id": product_id}
 
-    snap = _fetch_etf_snapshot_with_fallback(product["code"], product["market"])
+    snap = _fetch_etf_snapshot_with_fallback(product["code"], product["market"], product.get("yf_symbol", ""))
 
     return {
         "id": product_id,
