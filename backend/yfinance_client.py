@@ -1,5 +1,6 @@
 import time
 import logging
+import os
 import requests
 from typing import Optional
 
@@ -11,6 +12,11 @@ _cache_ttl = 60
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json",
+}
+
+PROXIES = {
+    "http": os.environ.get("http_proxy"),
+    "https": os.environ.get("https_proxy"),
 }
 
 
@@ -36,7 +42,7 @@ def _fetch_yahoo_finance(symbol: str, market: str = "") -> dict:
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}?region=US&lang=en-US&includePrePost=false&interval=1m&range=1d&corsDomain=finance.yahoo.com&formatted=false"
     try:
         time.sleep(0.3)
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(url, headers=HEADERS, timeout=10, proxies=PROXIES)
         resp.raise_for_status()
         data = resp.json()
         result = data.get("chart", {}).get("result", [])
