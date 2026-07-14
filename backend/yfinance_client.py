@@ -8,29 +8,6 @@ logger = logging.getLogger(__name__)
 _cache: dict[str, dict] = {}
 _cache_ttl = 60
 
-ETF_SYMBOL_MAP: dict[str, str] = {
-    "513100": "QQQ",
-    "513050": "QQQ",
-    "513500": "QQQ",
-    "513130": "QQQ",
-    "513220": "QQQ",
-    "513120": "QQQ",
-    "513190": "QQQ",
-    "513600": "QQQ",
-    "159920": "QQQ",
-    "510900": "SPY",
-    "159941": "EFA",
-    "159659": "EFA",
-    "159632": "EFA",
-    "159866": "EEM",
-    "513030": "EWY",
-    "518880": "GLD",
-    "159937": "VTI",
-    "159985": "VTI",
-    "161226": "VTI",
-    "159980": "VTI",
-}
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json",
@@ -98,8 +75,7 @@ def get_etf_snapshot_yfinance(code: str) -> dict:
     if cached:
         return cached
 
-    symbol = ETF_SYMBOL_MAP.get(code, code)
-    result = _fetch_yahoo_finance(symbol)
+    result = _fetch_yahoo_finance(code)
     if "error" not in result:
         return _set_cache(cache_key, result)
     return result
@@ -116,7 +92,7 @@ def get_etf_snapshots_batch_yfinance(codes: list[str]) -> dict[str, dict]:
 def check_yfinance_availability() -> dict:
     t0 = time.time()
     try:
-        result = get_etf_snapshot_yfinance("513100")
+        result = get_etf_snapshot_yfinance("QQQ")
         return {
             "available": "error" not in result,
             "latency_ms": round((time.time() - t0) * 1000),

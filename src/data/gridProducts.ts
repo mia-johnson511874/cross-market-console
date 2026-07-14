@@ -4,15 +4,16 @@ export interface GridProduct {
   id: string;
   name: string;
   code: string;
-  market: 'SSE' | 'SZSE';
+  market: 'SSE' | 'SZSE' | 'US';
   price: number;
-  currency: 'CNY';
+  currency: 'CNY' | 'USD';
   isT0: boolean;
   grids: number[];
   baseShares: number;
   sharesPerGrid: number;
   totalCapital: number;
-  category: 'hk-cross' | 'us-cross' | 'other-cross' | 'commodity' | 'commodity-lof';
+  category: 'hk-cross' | 'us-cross' | 'other-cross' | 'commodity' | 'commodity-lof' | 'us-etf';
+  yfSymbol?: string;
   pairedOption?: {
     optionId: string;
     correlation: number;
@@ -341,6 +342,107 @@ export const gridProducts: GridProduct[] = [
   },
 ];
 
+// ===== 美股ETF - 直连Yahoo Finance =====
+  {
+    id: 'us-cny',
+    name: '人民币ETF',
+    code: 'CYB',
+    market: 'US',
+    price: 0.12,
+    currency: 'USD',
+    isT0: true,
+    grids: [0.108, 0.111, 0.114, 0.117, 0.120, 0.123, 0.126, 0.129],
+    baseShares: 50000,
+    sharesPerGrid: 5000,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+  {
+    id: 'us-ashr',
+    name: '沪深300ETF(美股)',
+    code: 'ASHR',
+    market: 'US',
+    price: 27.50,
+    currency: 'USD',
+    isT0: true,
+    grids: [24.75, 25.36, 25.97, 26.58, 27.50, 28.32, 29.15, 29.97],
+    baseShares: 2000,
+    sharesPerGrid: 200,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+  {
+    id: 'us-qqq',
+    name: '纳指ETF(美股)',
+    code: 'QQQ',
+    market: 'US',
+    price: 715.00,
+    currency: 'USD',
+    isT0: true,
+    grids: [643.50, 661.62, 679.75, 697.87, 715.00, 732.12, 749.25, 766.37],
+    baseShares: 500,
+    sharesPerGrid: 50,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+  {
+    id: 'us-spy',
+    name: '标普500ETF(美股)',
+    code: 'SPY',
+    market: 'US',
+    price: 730.00,
+    currency: 'USD',
+    isT0: true,
+    grids: [657.00, 675.25, 693.50, 711.75, 730.00, 748.25, 766.50, 784.75],
+    baseShares: 500,
+    sharesPerGrid: 50,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+  {
+    id: 'us-ewh',
+    name: '恒生ETF(美股)',
+    code: 'EWH',
+    market: 'US',
+    price: 24.50,
+    currency: 'USD',
+    isT0: true,
+    grids: [22.05, 22.61, 23.17, 23.74, 24.50, 25.23, 25.97, 26.70],
+    baseShares: 3000,
+    sharesPerGrid: 300,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+  {
+    id: 'us-kweb',
+    name: '中国互联网ETF(美股)',
+    code: 'KWEB',
+    market: 'US',
+    price: 23.80,
+    currency: 'USD',
+    isT0: true,
+    grids: [21.42, 22.01, 22.61, 23.21, 23.80, 24.39, 24.99, 25.59],
+    baseShares: 3000,
+    sharesPerGrid: 300,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+  {
+    id: 'us-cqqq',
+    name: '中国科技ETF(美股)',
+    code: 'CQQQ',
+    market: 'US',
+    price: 38.50,
+    currency: 'USD',
+    isT0: true,
+    grids: [34.65, 35.72, 36.77, 37.83, 38.50, 39.55, 40.61, 41.67],
+    baseShares: 2000,
+    sharesPerGrid: 200,
+    totalCapital: 200000,
+    category: 'us-etf',
+  },
+];
+
 // 按类别分组
 export const categoryLabels: Record<GridProduct['category'], string> = {
   'hk-cross': '港股跨境ETF',
@@ -348,4 +450,5 @@ export const categoryLabels: Record<GridProduct['category'], string> = {
   'other-cross': '其他跨境ETF',
   'commodity': '商品ETF',
   'commodity-lof': '商品LOF',
+  'us-etf': '美股ETF',
 };

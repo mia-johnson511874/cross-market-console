@@ -61,32 +61,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- ETF 品种配置 (与前端 gridProducts.ts 保持一致) ----
+# ---- ETF 品种配置 ----
+# 国内环境: 东方财富直连获取 A股ETF 真实价格
+# 海外环境: Yahoo Finance 获取对应美股 ETF 真实价格
+
 ETF_PRODUCTS = [
-    # 港股跨境ETF
-    {"id": "a-hstech", "code": "513130", "market": "1", "name": "恒生科技ETF"},
-    {"id": "a-hsient", "code": "513220", "market": "1", "name": "恒生互联网ETF"},
-    {"id": "a-hsient2", "code": "513050", "market": "1", "name": "中概互联ETF"},
-    {"id": "a-hsi", "code": "159920", "market": "0", "name": "恒生ETF"},
-    {"id": "a-hsi2", "code": "510900", "market": "1", "name": "H股ETF"},
-    {"id": "a-hkstock50", "code": "513120", "market": "1", "name": "港股通50ETF"},
-    {"id": "a-hkfinance", "code": "513190", "market": "1", "name": "港股通金融ETF"},
-    {"id": "a-hstech2", "code": "513600", "market": "1", "name": "恒生科技指数ETF"},
-    # 美股跨境ETF
-    {"id": "a-nasdaq", "code": "513100", "market": "1", "name": "纳指ETF"},
-    {"id": "a-sp500", "code": "513500", "market": "1", "name": "标普500ETF"},
-    {"id": "a-nasdaq2", "code": "159941", "market": "0", "name": "纳指ETF深"},
-    {"id": "a-nasdaq100", "code": "159659", "market": "0", "name": "纳斯达克100ETF"},
-    {"id": "a-nasdaq3", "code": "159632", "market": "0", "name": "纳斯达克ETF沪"},
-    # 其他跨境ETF
-    {"id": "a-nikkei", "code": "159866", "market": "0", "name": "日经ETF"},
-    {"id": "a-germany", "code": "513030", "market": "1", "name": "德国ETF"},
-    # 商品ETF/LOF
-    {"id": "a-gold", "code": "518880", "market": "1", "name": "黄金ETF"},
-    {"id": "a-gold2", "code": "159937", "market": "0", "name": "黄金ETF深"},
-    {"id": "a-doupo", "code": "159985", "market": "0", "name": "豆粕ETF"},
-    {"id": "a-silver", "code": "161226", "market": "0", "name": "白银LOF"},
-    {"id": "a-metal", "code": "159980", "market": "0", "name": "有色金属ETF"},
+    # ===== 港股跨境ETF =====
+    {"id": "a-hstech", "code": "513130", "market": "1", "name": "恒生科技ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hsient", "code": "513220", "market": "1", "name": "恒生互联网ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hsient2", "code": "513050", "market": "1", "name": "中概互联ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hsi", "code": "159920", "market": "0", "name": "恒生ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hsi2", "code": "510900", "market": "1", "name": "H股ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hkstock50", "code": "513120", "market": "1", "name": "港股通50ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hkfinance", "code": "513190", "market": "1", "name": "港股通金融ETF", "yf_symbol": "QQQ"},
+    {"id": "a-hstech2", "code": "513600", "market": "1", "name": "恒生科技指数ETF", "yf_symbol": "QQQ"},
+    # ===== 美股跨境ETF =====
+    {"id": "a-nasdaq", "code": "513100", "market": "1", "name": "纳指ETF", "yf_symbol": "QQQ"},
+    {"id": "a-sp500", "code": "513500", "market": "1", "name": "标普500ETF", "yf_symbol": "SPY"},
+    {"id": "a-nasdaq2", "code": "159941", "market": "0", "name": "纳指ETF深", "yf_symbol": "QQQ"},
+    {"id": "a-nasdaq100", "code": "159659", "market": "0", "name": "纳斯达克100ETF", "yf_symbol": "QQQ"},
+    {"id": "a-nasdaq3", "code": "159632", "market": "0", "name": "纳斯达克ETF沪", "yf_symbol": "QQQ"},
+    # ===== 其他跨境ETF =====
+    {"id": "a-nikkei", "code": "159866", "market": "0", "name": "日经ETF", "yf_symbol": "EWJ"},
+    {"id": "a-germany", "code": "513030", "market": "1", "name": "德国ETF", "yf_symbol": "EWG"},
+    # ===== 商品ETF/LOF =====
+    {"id": "a-gold", "code": "518880", "market": "1", "name": "黄金ETF", "yf_symbol": "GLD"},
+    {"id": "a-gold2", "code": "159937", "market": "0", "name": "黄金ETF深", "yf_symbol": "GLD"},
+    {"id": "a-doupo", "code": "159985", "market": "0", "name": "豆粕ETF", "yf_symbol": "SOYB"},
+    {"id": "a-silver", "code": "161226", "market": "0", "name": "白银LOF", "yf_symbol": "SLV"},
+    {"id": "a-metal", "code": "159980", "market": "0", "name": "有色金属ETF", "yf_symbol": "COPX"},
+    # ===== 美股ETF - A股市场相关 =====
+    {"id": "us-cny", "code": "CYB", "market": "US", "name": "人民币ETF", "yf_symbol": "CYB"},
+    {"id": "us-ashr", "code": "ASHR", "market": "US", "name": "沪深300ETF(美股)", "yf_symbol": "ASHR"},
+    {"id": "us-qqq", "code": "QQQ", "market": "US", "name": "纳指ETF(美股)", "yf_symbol": "QQQ"},
+    {"id": "us-spy", "code": "SPY", "market": "US", "name": "标普500ETF(美股)", "yf_symbol": "SPY"},
+    # ===== 美股ETF - 港股市场相关 =====
+    {"id": "us-ewh", "code": "EWH", "market": "US", "name": "恒生ETF(美股)", "yf_symbol": "EWH"},
+    {"id": "us-kweb", "code": "KWEB", "market": "US", "name": "中国互联网ETF(美股)", "yf_symbol": "KWEB"},
+    {"id": "us-cqqq", "code": "CQQQ", "market": "US", "name": "中国科技ETF(美股)", "yf_symbol": "CQQQ"},
 ]
 
 # 期权标的映射
@@ -153,13 +165,15 @@ def _check_eastmoney_quick(max_retries: int = 2) -> bool:
 
 # ==================== 数据获取辅助函数 ====================
 
-def _fetch_etf_snapshot_with_fallback(code: str, market: str) -> dict:
+def _fetch_etf_snapshot_with_fallback(code: str, market: str, yf_symbol: str = "") -> dict:
     """
     获取 ETF 快照，带多级回退:
       1. 东方财富 API (主，国内环境)
       2. Yahoo Finance (备，海外环境)
       3. akshare 接口 (增强)
       4. 模拟数据 (兜底)
+
+    yf_symbol: Yahoo Finance 美股代码，用于海外环境获取真实行情
     """
     # 第1级: 东方财富 (仅当全局检测可用时才尝试，避免每个请求都超时)
     if _check_eastmoney_quick():
@@ -172,7 +186,8 @@ def _fetch_etf_snapshot_with_fallback(code: str, market: str) -> dict:
 
     # 第2级: Yahoo Finance (海外环境备用)
     if _has_yfinance:
-        snap = get_etf_snapshot_yfinance(code)
+        symbol_to_use = yf_symbol if yf_symbol else code
+        snap = get_etf_snapshot_yfinance(symbol_to_use)
         if "error" not in snap:
             snap["source"] = "yfinance"
             return snap
@@ -198,7 +213,7 @@ def _fetch_underlying_price(code: str, market: str = "1") -> dict:
 def _fetch_one_grid_product(product: dict, try_eastmoney: bool = True) -> dict:
     """获取单个网格品种数据（用于并发批量接口）"""
     if try_eastmoney:
-        snap = _fetch_etf_snapshot_with_fallback(product["code"], product["market"])
+        snap = _fetch_etf_snapshot_with_fallback(product["code"], product["market"], product.get("yf_symbol", ""))
     elif _has_akshare:
         snap = get_etf_realtime_snapshot_akshare(product["code"])
         if "error" not in snap:
@@ -295,6 +310,7 @@ def _build_grid_product(product: dict, snap: dict) -> dict:
         "code": product["code"],
         "name": product["name"],
         "market": product["market"],
+        "yf_symbol": product.get("yf_symbol", ""),
         "live_price": snap.get("price") if "error" not in snap else None,
         "prev_close": snap.get("prev_close"),
         "change_pct": snap.get("change_pct"),
@@ -322,7 +338,11 @@ def list_grid_products():
     else:
         # 第2级: Yahoo Finance (海外环境)
         if _has_yfinance:
-            snaps = {p["code"]: get_etf_snapshot_yfinance(p["code"]) for p in ETF_PRODUCTS}
+            snaps = {}
+            for p in ETF_PRODUCTS:
+                yf_symbol = p.get("yf_symbol", p["code"])
+                snap = get_etf_snapshot_yfinance(yf_symbol)
+                snaps[p["code"]] = snap
             results = [_build_grid_product(p, snaps.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
         else:
             # 第3级: akshare 全量 ETF 列表
