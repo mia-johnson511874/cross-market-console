@@ -17,7 +17,7 @@ BATCH_URL = "https://push2.eastmoney.com/api/qt/ulist.np/get"
 
 # 缓存最近的成功请求结果，避免重复请求
 _cache: dict[str, dict] = {}
-_cache_ttl = 30  # 缓存30秒
+_cache_ttl = 15  # 缓存15秒（与前端10秒轮询对齐）
 
 
 def _fetch_via_urllib(secid: str, fields: str) -> Optional[dict]:

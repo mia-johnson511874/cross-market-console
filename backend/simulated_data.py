@@ -10,6 +10,11 @@ import hashlib
 
 # 基础价格 (来自前端 gridProducts.ts 的静态配置)
 BASE_PRICES: dict[str, dict] = {
+    "510050": {"price": 2.85, "name": "上证50ETF"},
+    "510300": {"price": 4.05, "name": "沪深300ETF(沪)"},
+    "159919": {"price": 4.08, "name": "沪深300ETF(深)"},
+    "510500": {"price": 5.95, "name": "中证500ETF"},
+    "588000": {"price": 1.12, "name": "科创50ETF"},
     "513130": {"price": 0.580, "name": "恒生科技ETF"},
     "513220": {"price": 0.420, "name": "恒生互联网ETF"},
     "513050": {"price": 1.150, "name": "中概互联ETF"},

@@ -57,8 +57,8 @@ export function useGrid(
     // 立即获取一次
     poll();
 
-    // 每5秒轮询
-    intervalId = setInterval(poll, 5000);
+    // 每10秒轮询（与后端15秒缓存对齐，避免无效请求）
+    intervalId = setInterval(poll, 10000);
 
     return () => {
       mounted = false;

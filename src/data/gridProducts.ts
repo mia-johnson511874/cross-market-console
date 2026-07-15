@@ -12,7 +12,7 @@ export interface GridProduct {
   baseShares: number;
   sharesPerGrid: number;
   totalCapital: number;
-  category: 'hk-cross' | 'us-cross' | 'other-cross' | 'commodity' | 'commodity-lof' | 'us-etf';
+  category: 'etf-option' | 'hk-cross' | 'us-cross' | 'other-cross' | 'commodity' | 'commodity-lof' | 'us-etf';
   yfSymbol?: string;
   pairedOption?: {
     optionId: string;
@@ -23,6 +23,108 @@ export interface GridProduct {
 }
 
 export const gridProducts: GridProduct[] = [
+  // ===== 期权标的ETF =====
+  {
+    id: 'a-50etf',
+    name: '上证50ETF',
+    code: '510050',
+    market: 'SSE',
+    price: 2.85,
+    currency: 'CNY',
+    isT0: false,
+    grids: [2.565, 2.647, 2.730, 2.812, 2.850, 2.932, 3.015, 3.097],
+    baseShares: 20000,
+    sharesPerGrid: 2000,
+    totalCapital: 200000,
+    category: 'etf-option',
+    pairedOption: {
+      optionId: 'opt-50',
+      correlation: 1.0,
+      basisRisk: 'low',
+      note: '上证50ETF期权标的',
+    },
+  },
+  {
+    id: 'a-300etf',
+    name: '沪深300ETF(沪)',
+    code: '510300',
+    market: 'SSE',
+    price: 4.05,
+    currency: 'CNY',
+    isT0: false,
+    grids: [3.645, 3.768, 3.892, 4.016, 4.050, 4.174, 4.298, 4.422],
+    baseShares: 15000,
+    sharesPerGrid: 1500,
+    totalCapital: 200000,
+    category: 'etf-option',
+    pairedOption: {
+      optionId: 'opt-300',
+      correlation: 1.0,
+      basisRisk: 'low',
+      note: '沪深300ETF期权(沪)标的',
+    },
+  },
+  {
+    id: 'a-300etf-sz',
+    name: '沪深300ETF(深)',
+    code: '159919',
+    market: 'SZSE',
+    price: 4.08,
+    currency: 'CNY',
+    isT0: false,
+    grids: [3.672, 3.795, 3.916, 4.038, 4.080, 4.202, 4.324, 4.446],
+    baseShares: 15000,
+    sharesPerGrid: 1500,
+    totalCapital: 200000,
+    category: 'etf-option',
+    pairedOption: {
+      optionId: 'opt-300sz',
+      correlation: 1.0,
+      basisRisk: 'low',
+      note: '沪深300ETF期权(深)标的',
+    },
+  },
+  {
+    id: 'a-500etf',
+    name: '中证500ETF',
+    code: '510500',
+    market: 'SSE',
+    price: 5.95,
+    currency: 'CNY',
+    isT0: false,
+    grids: [5.355, 5.550, 5.747, 5.945, 5.950, 6.145, 6.342, 6.538],
+    baseShares: 10000,
+    sharesPerGrid: 1000,
+    totalCapital: 200000,
+    category: 'etf-option',
+    pairedOption: {
+      optionId: 'opt-500',
+      correlation: 1.0,
+      basisRisk: 'low',
+      note: '中证500ETF期权标的',
+    },
+  },
+  {
+    id: 'a-kc50',
+    name: '科创50ETF',
+    code: '588000',
+    market: 'SSE',
+    price: 1.12,
+    currency: 'CNY',
+    isT0: false,
+    grids: [1.008, 1.038, 1.068, 1.098, 1.120, 1.142, 1.164, 1.186],
+    baseShares: 50000,
+    sharesPerGrid: 5000,
+    totalCapital: 200000,
+    category: 'etf-option',
+    pairedOption: {
+      optionId: 'opt-kc50',
+      correlation: 1.0,
+      basisRisk: 'low',
+      note: '科创50ETF期权标的',
+    },
+  },
+
   // ===== 港股跨境ETF =====
   {
     id: 'a-hstech',
@@ -443,6 +545,7 @@ export const gridProducts: GridProduct[] = [
 
 // 按类别分组
 export const categoryLabels: Record<GridProduct['category'], string> = {
+  'etf-option': '期权标的ETF',
   'hk-cross': '港股跨境ETF',
   'us-cross': '美股跨境ETF',
   'other-cross': '其他跨境ETF',

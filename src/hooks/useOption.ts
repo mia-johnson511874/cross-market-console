@@ -54,7 +54,8 @@ export function useOption(
     };
 
     poll();
-    intervalId = setInterval(poll, 5000);
+    // 每10秒轮询（与后端15秒缓存对齐，避免无效请求）
+    intervalId = setInterval(poll, 10000);
 
     return () => {
       mounted = false;
@@ -180,17 +181,17 @@ export function useOption(
  */
 function optionToGridId(optionId: string): string | null {
   const map: Record<string, string> = {
-    'opt-50': 'a-hstech',       // 使用已有 ETF 产品 ID 获取价格
-    'opt-300': 'a-hsi',
-    'opt-300sz': 'a-hsi',
-    'opt-500': 'a-hsi2',
-    'opt-kc50': 'a-hstech2',
-    'opt-hstech': 'a-hstech',
-    'opt-au': 'a-gold',
-    'opt-ag': 'a-silver',
-    'opt-cu': 'a-metal',
-    'opt-m': 'a-doupo',
-    'opt-rb': 'a-metal',
+    'opt-50': 'a-50etf',        // 上证50ETF期权 → 上证50ETF
+    'opt-300': 'a-300etf',      // 沪深300ETF期权(沪) → 沪深300ETF(沪)
+    'opt-300sz': 'a-300etf-sz', // 沪深300ETF期权(深) → 沪深300ETF(深)
+    'opt-500': 'a-500etf',      // 中证500ETF期权 → 中证500ETF
+    'opt-kc50': 'a-kc50',       // 科创50ETF期权 → 科创50ETF
+    'opt-hstech': 'a-hstech',    // 恒生科技指数期权 → 恒生科技ETF
+    'opt-au': 'a-gold',         // 黄金期权 → 黄金ETF
+    'opt-ag': 'a-silver',       // 白银期权 → 白银LOF
+    'opt-cu': 'a-metal',        // 铜期权 → 有色金属ETF
+    'opt-m': 'a-doupo',         // 豆粕期权 → 豆粕ETF
+    'opt-rb': 'a-metal',        // 螺纹钢期权 → 有色金属ETF
   };
   return map[optionId] ?? null;
 }

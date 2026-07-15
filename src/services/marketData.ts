@@ -8,6 +8,11 @@ const FETCH_TIMEOUT = 15000;
 
 // 基础价格表 (与 gridProducts.ts 保持一致)
 const BASE_PRICES: Record<string, { price: number; name: string }> = {
+  'a-50etf':   { price: 2.85,  name: '上证50ETF' },
+  'a-300etf':  { price: 4.05,  name: '沪深300ETF(沪)' },
+  'a-300etf-sz': { price: 4.08,  name: '沪深300ETF(深)' },
+  'a-500etf':  { price: 5.95,  name: '中证500ETF' },
+  'a-kc50':    { price: 1.12,  name: '科创50ETF' },
   'a-hstech':  { price: 0.580, name: '恒生科技ETF' },
   'a-hsient':  { price: 0.420, name: '恒生互联网ETF' },
   'a-hsient2': { price: 1.150, name: '中概互联ETF' },
@@ -125,7 +130,7 @@ export async function fetchGridProducts(): Promise<GridProductsResponse> {
 
 export async function fetchGridSnapshot(id: string): Promise<LiveSnapshot | null> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 延长超时，避免缓存失效时过早降级
 
   try {
     const resp = await fetch(`${API_BASE}/grid-products/${id}/snapshot`, { signal: controller.signal });

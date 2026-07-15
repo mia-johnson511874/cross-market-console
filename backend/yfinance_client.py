@@ -2,12 +2,13 @@ import time
 import logging
 import os
 import requests
-from typing import Optional
+from typing import Optional, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
 _cache: dict[str, dict] = {}
-_cache_ttl = 60
+_cache_ttl = 30  # 缓存30秒（限流保护，比前端轮询慢3倍）
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -133,3 +134,117 @@ def check_yfinance_availability() -> dict:
     except Exception as e:
         logger.warning(f"Yahoo Finance check failed: {e}")
         return {"available": False, "latency_ms": round((time.time() - t0) * 1000)}
+
+
+def get_batch_quotes_spark(symbols: List[str]) -> Dict[str, dict]:
+    """
+    使用 Yahoo Finance spark 批量接口一次性获取多个品种的实时报价
+    spark 接口支持单次请求多个 symbol，返回字段较少但速度极快
+    
+    参数:
+        symbols: Yahoo Finance 代码列表，如 ["QQQ", "SPY", "GLD"]
+    
+    返回:
+        {symbol: {price, prev_close, change_pct, ...}}
+    """
+    if not symbols:
+        return {}
+
+    results: Dict[str, dict] = {}
+    need_fetch: List[str] = []
+    
+    for symbol in symbols:
+        cached = _cached(f"spark_{symbol}")
+        if cached:
+            results[symbol] = cached
+        else:
+            need_fetch.append(symbol)
+    
+    if not need_fetch:
+        return results
+    
+    symbols_str = ",".join(need_fetch)
+    url = f"https://query1.finance.yahoo.com/v8/finance/spark?symbols={symbols_str}&range=1d&interval=1m&includePrePost=false&corsDomain=finance.yahoo.com"
+
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10, proxies=PROXIES)
+        
+        if resp.status_code == 429:
+            logger.warning("Yahoo Finance spark batch rate limited")
+            return results
+        
+        resp.raise_for_status()
+        data = resp.json()
+        
+        fetched_count = 0
+        for symbol in need_fetch:
+            item = data.get(symbol, {})
+            if not item or not isinstance(item.get("response"), list) or len(item["response"]) == 0:
+                continue
+            
+            quote = item["response"][0].get("quote", {})
+            price = quote.get("regularMarketPrice")
+            prev_close = quote.get("previousClose")
+            
+            if price is None:
+                continue
+            
+            change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
+            
+            snap = {
+                "price": round(float(price), 3),
+                "prev_close": round(float(prev_close), 3) if prev_close else round(float(price), 3),
+                "change_pct": round(change_pct, 2),
+                "source": "yfinance_spark",
+            }
+            
+            _set_cache(f"spark_{symbol}", snap)
+            results[symbol] = snap
+            fetched_count += 1
+        
+        logger.info(f"Yahoo Finance spark batch: fetched {fetched_count}/{len(need_fetch)} symbols (cached: {len(symbols) - len(need_fetch)})")
+        return results
+    
+    except requests.RequestException as e:
+        logger.warning(f"Yahoo Finance spark batch request failed: {e}")
+        return results
+    except Exception as e:
+        logger.warning(f"Yahoo Finance spark batch parse failed: {e}")
+        return results
+
+
+def get_etf_snapshots_concurrent(symbols: List[str], markets: Optional[List[str]] = None, max_workers: int = 5) -> Dict[str, dict]:
+    """
+    使用并发方式获取多个 ETF 快照（fallback 方案）
+    
+    参数:
+        symbols: Yahoo Finance 代码列表
+        markets: 市场列表，与 symbols 一一对应
+        max_workers: 最大并发数，建议不超过5以避免限流
+    
+    返回:
+        {symbol: {price, prev_close, change_pct, ...}}
+    """
+    if not symbols:
+        return {}
+
+    results: Dict[str, dict] = {}
+    markets = markets or [""] * len(symbols)
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_symbol = {
+            executor.submit(get_etf_snapshot_yfinance, symbols[i], markets[i]): symbols[i]
+            for i in range(len(symbols))
+        }
+        
+        for future in as_completed(future_to_symbol):
+            symbol = future_to_symbol[future]
+            try:
+                result = future.result()
+                results[symbol] = result
+            except Exception as e:
+                logger.warning(f"Concurrent fetch failed for {symbol}: {e}")
+                results[symbol] = {"error": str(e)}
+    
+    logger.info(f"Yahoo Finance concurrent: fetched {len([r for r in results.values() if 'error' not in r])}/{len(symbols)} symbols")
+    return results

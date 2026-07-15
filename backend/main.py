@@ -7,7 +7,7 @@
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from typing import Optional, Dict
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,7 +24,12 @@ _has_eastmoney = True  # eastmoney_client 总是可用
 
 # Yahoo Finance — 海外环境备用数据源
 try:
-    from yfinance_client import get_etf_snapshot_yfinance, check_yfinance_availability
+    from yfinance_client import (
+        get_etf_snapshot_yfinance,
+        check_yfinance_availability,
+        get_batch_quotes_spark,
+        get_etf_snapshots_concurrent,
+    )
     _has_yfinance = True
     logger.info("Yahoo Finance client loaded successfully")
 except ImportError:
@@ -66,6 +71,12 @@ app.add_middleware(
 # 海外环境: Yahoo Finance 获取对应美股 ETF 真实价格
 
 ETF_PRODUCTS = [
+    # ===== 期权标的ETF =====
+    {"id": "a-50etf", "code": "510050", "market": "1", "name": "上证50ETF", "yf_symbol": "QQQ"},
+    {"id": "a-300etf", "code": "510300", "market": "1", "name": "沪深300ETF(沪)", "yf_symbol": "SPY"},
+    {"id": "a-300etf-sz", "code": "159919", "market": "0", "name": "沪深300ETF(深)", "yf_symbol": "SPY"},
+    {"id": "a-500etf", "code": "510500", "market": "1", "name": "中证500ETF", "yf_symbol": "SPY"},
+    {"id": "a-kc50", "code": "588000", "market": "1", "name": "科创50ETF", "yf_symbol": "QQQ"},
     # ===== 港股跨境ETF =====
     {"id": "a-hstech", "code": "513130", "market": "1", "name": "恒生科技ETF", "yf_symbol": "QQQ"},
     {"id": "a-hsient", "code": "513220", "market": "1", "name": "恒生互联网ETF", "yf_symbol": "QQQ"},
@@ -336,13 +347,36 @@ def list_grid_products():
         code_to_snap = {snap["code"]: snap for snap in batch if "code" in snap}
         results = [_build_grid_product(p, code_to_snap.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
     else:
-        # 第2级: Yahoo Finance (海外环境)
+        # 第2级: Yahoo Finance (海外环境) - 优化版本：先去重，再批量获取
         if _has_yfinance:
-            snaps = {}
+            yf_symbol_to_products = {}
             for p in ETF_PRODUCTS:
                 yf_symbol = p.get("yf_symbol", p["code"])
-                snap = get_etf_snapshot_yfinance(yf_symbol, p["market"])
-                snaps[p["code"]] = snap
+                if yf_symbol not in yf_symbol_to_products:
+                    yf_symbol_to_products[yf_symbol] = []
+                yf_symbol_to_products[yf_symbol].append(p)
+            
+            unique_symbols = list(yf_symbol_to_products.keys())
+            logger.info(f"Yahoo Finance batch: {len(unique_symbols)} unique symbols for {len(ETF_PRODUCTS)} products")
+            
+            snap_results: Dict[str, dict] = {}
+            
+            spark_result = get_batch_quotes_spark(unique_symbols)
+            if spark_result:
+                snap_results = spark_result
+            
+            if len(snap_results) < len(unique_symbols):
+                missing_symbols = [s for s in unique_symbols if s not in snap_results]
+                logger.info(f"Spark batch missing {len(missing_symbols)} symbols, falling back to concurrent fetch")
+                concurrent_result = get_etf_snapshots_concurrent(missing_symbols)
+                snap_results.update(concurrent_result)
+            
+            snaps: Dict[str, dict] = {}
+            for yf_symbol, products in yf_symbol_to_products.items():
+                snap = snap_results.get(yf_symbol, {"error": "not found"})
+                for p in products:
+                    snaps[p["code"]] = snap
+            
             results = [_build_grid_product(p, snaps.get(p["code"], {"error": "missing"})) for p in ETF_PRODUCTS]
         else:
             # 第3级: akshare 全量 ETF 列表
