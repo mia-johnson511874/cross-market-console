@@ -592,6 +592,68 @@ def get_option_chain(product_id: str):
     return {"error": "Unknown product", "id": product_id}
 
 
+@app.get("/api/option-chain/{underlying}")
+def get_option_chain_by_underlying(underlying: str):
+    """
+    根据标的名称获取期权链数据（简化版，用于前端实时显示）
+    支持: 50ETF, 300ETF, 500ETF, KC50ETF
+    """
+    ak_name_map: Dict[str, str] = {
+        "50ETF": "50ETF",
+        "300ETF": "300ETF",
+        "500ETF": "500ETF",
+        "KC50ETF": "科创50",
+        "HSTECH": "HSTECH",
+    }
+
+    ak_name = ak_name_map.get(underlying)
+    if not ak_name:
+        return {"error": f"Unknown underlying: {underlying}", "underlying": underlying}
+
+    result = {
+        "underlying_code": underlying,
+        "underlying_name": underlying,
+        "expiry_months": [],
+        "contracts": [],
+        "source": "simulated",
+        "simulated": True,
+    }
+
+    if _has_akshare:
+        try:
+            chain_data = get_option_chain_with_prices("", ak_name)
+            if chain_data and "contracts" in chain_data and len(chain_data["contracts"]) > 0:
+                result["expiry_months"] = chain_data.get("expiry_months", [])
+                result["contracts"] = chain_data.get("contracts", [])
+                result["source"] = chain_data.get("source", "akshare")
+                result["simulated"] = False
+            else:
+                current_data = get_option_current_day_sse(ak_name)
+                if current_data and len(current_data) > 0:
+                    expiry_months = sorted(list(set([c.get("expiry_month", "") for c in current_data if c.get("expiry_month")])))
+                    contracts = []
+                    for c in current_data:
+                        contracts.append({
+                            "code": c.get("code", ""),
+                            "name": c.get("name", ""),
+                            "strike": c.get("strike", 0),
+                            "expiry": c.get("expiry_month", ""),
+                            "type": c.get("type", ""),
+                            "latest_price": c.get("latest_price"),
+                            "volume": c.get("volume"),
+                            "open_interest": c.get("open_interest"),
+                            "change_pct": c.get("change_pct"),
+                        })
+                    result["expiry_months"] = expiry_months[:3]
+                    result["contracts"] = contracts
+                    result["source"] = "akshare"
+                    result["simulated"] = False
+        except Exception as e:
+            logger.error(f"Failed to get option chain for {underlying}: {e}")
+
+    return result
+
+
 @app.get("/api/cross-pairs")
 def list_cross_pairs():
     """返回跨品种配对关系 (静态配置)"""

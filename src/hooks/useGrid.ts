@@ -1,5 +1,3 @@
-// 网格交易状态管理 Hook
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { GridProduct } from '../data/gridProducts';
 import {
@@ -24,16 +22,17 @@ export function useGrid(
   const [state, setState] = useState<GridState>(() => initGridState(product));
   const [error, setError] = useState<string | null>(null);
 
-  // 实时行情状态
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
   const [dataSource, setDataSource] = useState<string | undefined>(undefined);
+  
   const productRef = useRef(product);
   productRef.current = product;
+  
+  const prevLivePriceRef = useRef<number | null>(null);
 
-  // 轮询实时价格
   useEffect(() => {
     let mounted = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -54,10 +53,7 @@ export function useGrid(
       }
     };
 
-    // 立即获取一次
     poll();
-
-    // 每10秒轮询（与后端15秒缓存对齐，避免无效请求）
     intervalId = setInterval(poll, 10000);
 
     return () => {
@@ -66,17 +62,77 @@ export function useGrid(
     };
   }, [product.id]);
 
-  // 健康检查
   useEffect(() => {
     checkHealth().then(setIsOnline);
   }, []);
 
-  // 品种切换时重置
+  // 自动网格触发：当实时价格穿越网格线时自动买卖
+  useEffect(() => {
+    if (livePrice === null || prevLivePriceRef.current === null) {
+      prevLivePriceRef.current = livePrice;
+      return;
+    }
+
+    const prevPrice = prevLivePriceRef.current;
+    const currPrice = livePrice;
+    const grids = product.grids;
+    
+    for (let i = 0; i < grids.length - 1; i++) {
+      const lower = grids[i];
+      const upper = grids[i + 1];
+      
+      if (prevPrice >= upper && currPrice < upper) {
+        setState((prevState) => {
+          if (prevState.currentIdx > i) {
+            try {
+              const newState = simulateGridMove(-1, prevState, product);
+              const newPrice = product.grids[newState.currentIdx];
+              addLog({
+                time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                message: `自动买入: ${product.name} @ ${newPrice.toFixed(3)} (价格跌破 ${upper.toFixed(3)})`,
+                side: 'grid',
+              });
+              return newState;
+            } catch {
+              return prevState;
+            }
+          }
+          return prevState;
+        });
+        break;
+      }
+      
+      if (prevPrice <= lower && currPrice > lower) {
+        setState((prevState) => {
+          if (prevState.currentIdx <= i) {
+            try {
+              const newState = simulateGridMove(1, prevState, product);
+              const newPrice = product.grids[newState.currentIdx];
+              addLog({
+                time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                message: `自动卖出: ${product.name} @ ${newPrice.toFixed(3)} (价格突破 ${lower.toFixed(3)})`,
+                side: 'grid',
+              });
+              return newState;
+            } catch {
+              return prevState;
+            }
+          }
+          return prevState;
+        });
+        break;
+      }
+    }
+
+    prevLivePriceRef.current = currPrice;
+  }, [livePrice, product, addLog]);
+
   const resetWithProduct = useCallback(
     (newProduct: GridProduct) => {
       setState(initGridState(newProduct));
       setError(null);
       setLivePrice(null);
+      prevLivePriceRef.current = null;
       addLog({
         time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
         message: `切换品种: ${newProduct.name} (${newProduct.code})`,
@@ -86,7 +142,6 @@ export function useGrid(
     [addLog]
   );
 
-  // 下跌一格 (买入)
   const moveDown = useCallback(() => {
     setState((prev) => {
       try {
@@ -96,7 +151,7 @@ export function useGrid(
         const newPrice = product.grids[newState.currentIdx];
         addLog({
           time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-          message: `网格买入: ${product.name} @ ${newPrice.toFixed(3)} (下跌从 ${oldPrice.toFixed(3)})，买入${product.sharesPerGrid}份`,
+          message: `手动买入: ${product.name} @ ${newPrice.toFixed(3)} (从 ${oldPrice.toFixed(3)})`,
           side: 'grid',
         });
         return newState;
@@ -107,7 +162,6 @@ export function useGrid(
     });
   }, [product, addLog]);
 
-  // 上涨一格 (卖出)
   const moveUp = useCallback(() => {
     setState((prev) => {
       try {
@@ -117,7 +171,7 @@ export function useGrid(
         const newPrice = product.grids[newState.currentIdx];
         addLog({
           time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-          message: `网格卖出: ${product.name} @ ${newPrice.toFixed(3)} (上涨从 ${oldPrice.toFixed(3)})，卖出${product.sharesPerGrid}份`,
+          message: `手动卖出: ${product.name} @ ${newPrice.toFixed(3)} (从 ${oldPrice.toFixed(3)})`,
           side: 'grid',
         });
         return newState;
@@ -128,10 +182,10 @@ export function useGrid(
     });
   }, [product, addLog]);
 
-  // 重置
   const reset = useCallback(() => {
     setState(initGridState(product));
     setError(null);
+    prevLivePriceRef.current = null;
     addLog({
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       message: `重置网格: ${product.name}`,
@@ -139,7 +193,7 @@ export function useGrid(
     });
   }, [product, addLog]);
 
-  const currentPrice = product.grids[state.currentIdx];
+  const currentPrice = livePrice ?? product.grids[state.currentIdx];
   const capitalRatio = (state.capitalUsed / product.totalCapital) * 100;
 
   return {

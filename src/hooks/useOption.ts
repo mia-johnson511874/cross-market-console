@@ -1,5 +1,3 @@
-// 期权双日历价差状态管理 Hook
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { OptionProduct } from '../data/optionProducts';
 import {
@@ -8,8 +6,25 @@ import {
   simulateOptionMove,
   simulateTimeDecay,
 } from '../utils/optionEngine';
-import { fetchGridSnapshot } from '../services/marketData';
+import { fetchGridSnapshot, fetchOptionChain } from '../services/marketData';
 import type { TradeLogEntry } from './useGrid';
+
+export interface OptionChainData {
+  underlying_code: string;
+  underlying_name: string;
+  expiry_months: string[];
+  contracts: Array<{
+    code: string;
+    name: string;
+    strike: number;
+    expiry: string;
+    type: string;
+    latest_price: number | null;
+    volume: number | null;
+    open_interest: number | null;
+    change_pct: number | null;
+  }>;
+}
 
 export function useOption(
   product: OptionProduct,
@@ -19,16 +34,15 @@ export function useOption(
     initOptionState(product)
   );
 
-  // 实时行情状态
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [isSimulated, setIsSimulated] = useState<boolean>(false);
   const [dataSource, setDataSource] = useState<string | undefined>(undefined);
+  const [optionChain, setOptionChain] = useState<OptionChainData | null>(null);
   const productRef = useRef(product);
   productRef.current = product;
 
-  // 轮询实时标的物价格
   useEffect(() => {
     let mounted = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -54,7 +68,6 @@ export function useOption(
     };
 
     poll();
-    // 每10秒轮询（与后端15秒缓存对齐，避免无效请求）
     intervalId = setInterval(poll, 10000);
 
     return () => {
@@ -63,11 +76,88 @@ export function useOption(
     };
   }, [product.id]);
 
-  // 品种切换时重置
+  useEffect(() => {
+    let mounted = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const fetchChain = async () => {
+      const productId = productRef.current.id;
+      const underlying = optionToUnderlying(productId);
+      if (underlying) {
+        const chain = await fetchOptionChain(underlying);
+        if (!mounted) return;
+        if (chain && chain.contracts && chain.contracts.length > 0) {
+          setOptionChain(chain);
+          updateOptionPricesFromChain(chain);
+        }
+      }
+    };
+
+    const updateOptionPricesFromChain = (chain: OptionChainData) => {
+      if (!livePrice) return;
+
+      const nearMonth = chain.expiry_months[0] || '';
+      const farMonth = chain.expiry_months[1] || chain.expiry_months[0] || '';
+
+      const nearCall = findContract(chain, nearMonth, livePrice, '认购');
+      const nearPut = findContract(chain, nearMonth, livePrice, '认沽');
+      const farCall = findContract(chain, farMonth, livePrice, '认购');
+      const farPut = findContract(chain, farMonth, livePrice, '认沽');
+
+      setState((prev) => ({
+        ...prev,
+        index: livePrice,
+        strike: livePrice,
+        nearCallPremium: nearCall?.latest_price ?? prev.nearCallPremium,
+        nearPutPremium: nearPut?.latest_price ?? prev.nearPutPremium,
+        farCallCost: farCall?.latest_price ?? prev.farCallCost,
+        farPutCost: farPut?.latest_price ?? prev.farPutCost,
+      }));
+    };
+
+    const findContract = (
+      chain: OptionChainData,
+      expiry: string,
+      targetStrike: number,
+      optionType: string
+    ) => {
+      const candidates = chain.contracts.filter(
+        (c) =>
+          c.expiry.includes(expiry) &&
+          c.type.includes(optionType) &&
+          Math.abs(c.strike - targetStrike) < targetStrike * 0.05
+      );
+      if (candidates.length === 0) return null;
+      return candidates.reduce((prev, curr) =>
+        Math.abs(curr.strike - targetStrike) < Math.abs(prev.strike - targetStrike)
+          ? curr
+          : prev
+      );
+    };
+
+    fetchChain();
+    intervalId = setInterval(fetchChain, 30000);
+
+    return () => {
+      mounted = false;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [product.id, livePrice]);
+
+  useEffect(() => {
+    if (livePrice) {
+      setState((prev) => ({
+        ...prev,
+        index: livePrice,
+      }));
+    }
+  }, [livePrice]);
+
   const resetWithProduct = useCallback(
     (newProduct: OptionProduct) => {
       setState(initOptionState(newProduct));
       setLivePrice(null);
+      setOptionChain(null);
       addLog({
         time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
         message: `切换期权品种: ${newProduct.name} (${newProduct.code})`,
@@ -77,7 +167,6 @@ export function useOption(
     [addLog]
   );
 
-  // 标的下跌
   const moveDown = useCallback(() => {
     setState((prev) => {
       const newState = simulateOptionMove(-1, prev, product);
@@ -90,7 +179,6 @@ export function useOption(
     });
   }, [product, addLog]);
 
-  // 标的上涨
   const moveUp = useCallback(() => {
     setState((prev) => {
       const newState = simulateOptionMove(1, prev, product);
@@ -103,7 +191,6 @@ export function useOption(
     });
   }, [product, addLog]);
 
-  // 时间流逝1天
   const timePass = useCallback(() => {
     setState((prev) => {
       const newState = simulateTimeDecay(prev);
@@ -116,9 +203,9 @@ export function useOption(
     });
   }, [product, addLog]);
 
-  // 重置
   const reset = useCallback(() => {
     setState(initOptionState(product));
+    setOptionChain(null);
     addLog({
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       message: `重置期权: ${product.name}`,
@@ -126,7 +213,6 @@ export function useOption(
     });
   }, [product, addLog]);
 
-  // 计算四条腿的显示信息
   const legs = [
     {
       label: '卖出近月Call',
@@ -167,6 +253,7 @@ export function useOption(
     isOnline,
     isSimulated,
     dataSource,
+    optionChain,
     moveDown,
     moveUp,
     timePass,
@@ -175,23 +262,31 @@ export function useOption(
   };
 }
 
-/**
- * 期权 ID → 对应 grid product ID 映射
- * 用于通过快照接口获取标的物实时价格
- */
 function optionToGridId(optionId: string): string | null {
   const map: Record<string, string> = {
-    'opt-50': 'a-50etf',        // 上证50ETF期权 → 上证50ETF
-    'opt-300': 'a-300etf',      // 沪深300ETF期权(沪) → 沪深300ETF(沪)
-    'opt-300sz': 'a-300etf-sz', // 沪深300ETF期权(深) → 沪深300ETF(深)
-    'opt-500': 'a-500etf',      // 中证500ETF期权 → 中证500ETF
-    'opt-kc50': 'a-kc50',       // 科创50ETF期权 → 科创50ETF
-    'opt-hstech': 'a-hstech',    // 恒生科技指数期权 → 恒生科技ETF
-    'opt-au': 'a-gold',         // 黄金期权 → 黄金ETF
-    'opt-ag': 'a-silver',       // 白银期权 → 白银LOF
-    'opt-cu': 'a-metal',        // 铜期权 → 有色金属ETF
-    'opt-m': 'a-doupo',         // 豆粕期权 → 豆粕ETF
-    'opt-rb': 'a-metal',        // 螺纹钢期权 → 有色金属ETF
+    'opt-50': 'a-50etf',
+    'opt-300': 'a-300etf',
+    'opt-300sz': 'a-300etf-sz',
+    'opt-500': 'a-500etf',
+    'opt-kc50': 'a-kc50',
+    'opt-hstech': 'a-hstech',
+    'opt-au': 'a-gold',
+    'opt-ag': 'a-silver',
+    'opt-cu': 'a-metal',
+    'opt-m': 'a-doupo',
+    'opt-rb': 'a-metal',
+  };
+  return map[optionId] ?? null;
+}
+
+function optionToUnderlying(optionId: string): string | null {
+  const map: Record<string, string> = {
+    'opt-50': '50ETF',
+    'opt-300': '300ETF',
+    'opt-300sz': '300ETF',
+    'opt-500': '500ETF',
+    'opt-kc50': 'KC50ETF',
+    'opt-hstech': 'HSTECH',
   };
   return map[optionId] ?? null;
 }

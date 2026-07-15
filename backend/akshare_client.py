@@ -199,9 +199,12 @@ def get_option_list_sse(underlying: str = "50ETF") -> dict:
         return {"error": str(e), "underlying": underlying, "expiry_months": []}
 
 
-def get_option_current_day_sse() -> list[dict]:
+def get_option_current_day_sse(underlying: str = "") -> list[dict]:
     """
-    获取当前交易日上交所所有期权合约实时行情
+    获取当前交易日上交所期权合约实时行情
+
+    Args:
+        underlying: 标的名称，如 "50ETF", "300ETF"。为空时返回全部
 
     Returns:
         期权合约列表，含价格、成交量、隐含波动率等
@@ -214,11 +217,23 @@ def get_option_current_day_sse() -> list[dict]:
 
         contracts = []
         for _, row in df.head(200).iterrows():
+            name = str(row.get("合约名称", ""))
+            if underlying and underlying not in name:
+                continue
+
+            expiry_month = ""
+            expiry_raw = row.get("到期日", "")
+            if expiry_raw:
+                expiry_str = str(expiry_raw)
+                if len(expiry_str) >= 6:
+                    expiry_month = expiry_str[:6]
+
             contracts.append({
                 "code": str(row.get("合约交易代码", row.get("代码", ""))),
-                "name": str(row.get("合约名称", "")),
+                "name": name,
                 "strike": float(row.get("行权价", 0)) if row.get("行权价") else 0,
-                "expiry": str(row.get("到期日", "")),
+                "expiry": expiry_month,
+                "expiry_month": expiry_month,
                 "type": str(row.get("期权类型", "")),
                 "latest_price": float(row.get("最新价", 0)) if "最新价" in df.columns else None,
                 "volume": int(row.get("成交量", 0)) if "成交量" in df.columns else None,
@@ -227,7 +242,7 @@ def get_option_current_day_sse() -> list[dict]:
             })
         return contracts
     except Exception as e:
-        logger.warning(f"get_option_current_day_sse: {e}")
+        logger.warning(f"get_option_current_day_sse({underlying}): {e}")
         return [{"error": str(e)}]
 
 

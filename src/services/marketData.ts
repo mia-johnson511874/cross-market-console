@@ -182,10 +182,40 @@ export interface DataSourcesResponse {
   checked_at: string;
 }
 
-/**
- * 获取数据源诊断信息
- * 用于显示当前数据来源状态
- */
+export interface OptionChainContract {
+  code: string;
+  name: string;
+  strike: number;
+  expiry: string;
+  type: string;
+  latest_price: number | null;
+  volume: number | null;
+  open_interest: number | null;
+  change_pct: number | null;
+}
+
+export interface OptionChainResponse {
+  underlying_code: string;
+  underlying_name: string;
+  expiry_months: string[];
+  contracts: OptionChainContract[];
+  source?: string;
+  simulated?: boolean;
+}
+
+export async function fetchOptionChain(underlying: string): Promise<OptionChainResponse | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+  try {
+    const resp = await fetch(`${API_BASE}/option-chain/${encodeURIComponent(underlying)}`, { signal: controller.signal });
+    if (resp.ok) return await resp.json();
+  } catch { /* fallback */ } finally {
+    clearTimeout(timeoutId);
+  }
+  return null;
+}
+
 export async function fetchDataSources(): Promise<DataSourcesResponse | null> {
   try {
     const controller = new AbortController();
