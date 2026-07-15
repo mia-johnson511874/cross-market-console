@@ -71,9 +71,17 @@ export default function App() {
     fetchDataSources().then(setDataSources);
     const interval = setInterval(() => {
       fetchDataSources().then(setDataSources);
-    }, 30000); // 30秒刷新一次
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // 品种切换时强制刷新监控页面
+  useEffect(() => {
+    if (activePage === 'monitor') {
+      grid.reset();
+      option.reset();
+    }
+  }, [selectedGrid.id, selectedOption.id, activePage]);
 
   // 查找配对关系
   const crossPair = useMemo(
@@ -109,7 +117,12 @@ export default function App() {
       side: 'grid',
       message: `下单成功: ${product.name}`,
     });
-    setSelectedGrid(product);
+    const foundProduct = gridProducts.find((p) => p.id === product.id);
+    if (foundProduct) {
+      setSelectedGrid(foundProduct);
+    } else {
+      setSelectedGrid(product);
+    }
     setActivePage('monitor');
   }, [addLog]);
 
@@ -119,7 +132,12 @@ export default function App() {
       side: 'option',
       message: `下单成功: ${product.name}`,
     });
-    setSelectedOption(product);
+    const foundProduct = optionProducts.find((p) => p.id === product.id);
+    if (foundProduct) {
+      setSelectedOption(foundProduct);
+    } else {
+      setSelectedOption(product);
+    }
     setActivePage('monitor');
   }, [addLog]);
 
