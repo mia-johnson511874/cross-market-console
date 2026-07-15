@@ -3,6 +3,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import GridPanel from './components/GridPanel';
 import OptionPanel from './components/OptionPanel';
+import GridOrderPage from './components/GridOrderPage';
+import OptionOrderPage from './components/OptionOrderPage';
 import CrossPairNotice from './components/CrossPairNotice';
 import TradeLog from './components/TradeLog';
 import Overview from './components/Overview';
@@ -14,7 +16,12 @@ import { useOption } from './hooks/useOption';
 import { fetchDataSources, type DataSourcesResponse } from './services/marketData';
 import './App.css';
 
+type ActivePage = 'monitor' | 'grid-order' | 'option-order';
+
 export default function App() {
+  // 当前活动页面
+  const [activePage, setActivePage] = useState<ActivePage>('monitor');
+
   // 交易日志
   const [logs, setLogs] = useState<TradeLogEntry[]>([]);
 
@@ -96,6 +103,24 @@ export default function App() {
     return pair ? `${pair.name} (${pair.code})` : undefined;
   }, [selectedOption]);
 
+  const handleGridOrderSubmit = useCallback((product: typeof selectedGrid) => {
+    addLog({
+      time: new Date().toLocaleTimeString(),
+      side: 'grid',
+      message: `下单成功: ${product.name}`,
+    });
+    setActivePage('monitor');
+  }, [addLog]);
+
+  const handleOptionOrderSubmit = useCallback((product: typeof selectedOption) => {
+    addLog({
+      time: new Date().toLocaleTimeString(),
+      side: 'option',
+      message: `下单成功: ${product.name}`,
+    });
+    setActivePage('monitor');
+  }, [addLog]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -104,69 +129,113 @@ export default function App() {
       </header>
 
       <main className="main-content">
-        <div className="panels-container">
-          <GridPanel
-            selectedProduct={selectedGrid}
-            onSelectProduct={handleGridChange}
-            state={grid.state}
-            currentPrice={grid.currentPrice}
-            capitalRatio={grid.capitalRatio}
-            error={grid.error}
-            onMoveDown={grid.moveDown}
-            onMoveUp={grid.moveUp}
-            onReset={grid.reset}
-            pairedOptionName={pairedOptionName}
-            livePrice={grid.livePrice}
-            liveChangePct={grid.liveChangePct}
-            isOnline={grid.isOnline}
-            isSimulated={grid.isSimulated}
-            dataSource={grid.dataSource}
-          />
-
-          <div className="panel-divider" />
-
-          <OptionPanel
-            selectedProduct={selectedOption}
-            onSelectProduct={handleOptionChange}
-            state={option.state}
-            legs={option.legs}
-            onMoveDown={option.moveDown}
-            onMoveUp={option.moveUp}
-            onTimePass={option.timePass}
-            onReset={option.reset}
-            pairedGridName={pairedGridName}
-            livePrice={option.livePrice}
-            liveChangePct={option.liveChangePct}
-            isOnline={option.isOnline}
-            isSimulated={option.isSimulated}
-            dataSource={option.dataSource}
-          />
+        {/* 页面导航 */}
+        <div className="nav-tabs">
+          <button
+            className={`nav-tab ${activePage === 'monitor' ? 'active' : ''}`}
+            onClick={() => setActivePage('monitor')}
+          >
+            📊 实时监控
+          </button>
+          <button
+            className={`nav-tab ${activePage === 'grid-order' ? 'active' : ''}`}
+            onClick={() => setActivePage('grid-order')}
+          >
+            📈 网格交易下单
+          </button>
+          <button
+            className={`nav-tab ${activePage === 'option-order' ? 'active' : ''}`}
+            onClick={() => setActivePage('option-order')}
+          >
+            📅 期权下单
+          </button>
         </div>
 
-        {/* 跨品种配对提示 */}
-        <CrossPairNotice
-          pair={crossPair}
-          gridProduct={selectedGrid}
-          optionProduct={selectedOption}
-        />
+        {/* 下单页面 */}
+        {activePage === 'grid-order' && (
+          <GridOrderPage
+            onSubmit={handleGridOrderSubmit}
+            onCancel={() => setActivePage('monitor')}
+            livePrice={grid.livePrice}
+          />
+        )}
 
-        {/* 组合概览 */}
-        <Overview
-          gridPnl={grid.state.realizedPnl}
-          optionPnl={option.state.realizedPnl}
-          gridTrades={grid.state.trades}
-          optionTrades={option.state.trades}
-          optionCurrency={selectedOption.currency}
-          optionState={option.state}
-          isPaired={isPaired}
-          isCrossProduct={isCrossProduct}
-          dataSources={dataSources}
-          gridOnline={grid.isOnline}
-          optionOnline={option.isOnline}
-        />
+        {activePage === 'option-order' && (
+          <OptionOrderPage
+            onSubmit={handleOptionOrderSubmit}
+            onCancel={() => setActivePage('monitor')}
+            livePrice={option.livePrice}
+          />
+        )}
 
-        {/* 交易记录 */}
-        <TradeLog logs={logs} />
+        {/* 监控页面 */}
+        {activePage === 'monitor' && (
+          <>
+            <div className="panels-container">
+              <GridPanel
+                selectedProduct={selectedGrid}
+                onSelectProduct={handleGridChange}
+                state={grid.state}
+                currentPrice={grid.currentPrice}
+                capitalRatio={grid.capitalRatio}
+                error={grid.error}
+                onMoveDown={grid.moveDown}
+                onMoveUp={grid.moveUp}
+                onReset={grid.reset}
+                pairedOptionName={pairedOptionName}
+                livePrice={grid.livePrice}
+                liveChangePct={grid.liveChangePct}
+                isOnline={grid.isOnline}
+                isSimulated={grid.isSimulated}
+                dataSource={grid.dataSource}
+              />
+
+              <div className="panel-divider" />
+
+              <OptionPanel
+                selectedProduct={selectedOption}
+                onSelectProduct={handleOptionChange}
+                state={option.state}
+                legs={option.legs}
+                onMoveDown={option.moveDown}
+                onMoveUp={option.moveUp}
+                onTimePass={option.timePass}
+                onReset={option.reset}
+                pairedGridName={pairedGridName}
+                livePrice={option.livePrice}
+                liveChangePct={option.liveChangePct}
+                isOnline={option.isOnline}
+                isSimulated={option.isSimulated}
+                dataSource={option.dataSource}
+              />
+            </div>
+
+            {/* 跨品种配对提示 */}
+            <CrossPairNotice
+              pair={crossPair}
+              gridProduct={selectedGrid}
+              optionProduct={selectedOption}
+            />
+
+            {/* 组合概览 */}
+            <Overview
+              gridPnl={grid.state.realizedPnl}
+              optionPnl={option.state.realizedPnl}
+              gridTrades={grid.state.trades}
+              optionTrades={option.state.trades}
+              optionCurrency={selectedOption.currency}
+              optionState={option.state}
+              isPaired={isPaired}
+              isCrossProduct={isCrossProduct}
+              dataSources={dataSources}
+              gridOnline={grid.isOnline}
+              optionOnline={option.isOnline}
+            />
+
+            {/* 交易记录 */}
+            <TradeLog logs={logs} />
+          </>
+        )}
       </main>
 
       <footer className="app-footer">
