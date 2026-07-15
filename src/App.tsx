@@ -60,20 +60,18 @@ export default function App() {
   // 品种切换处理 - 同时保存到 localStorage
   const handleGridChange = useCallback(
     (p: typeof selectedGrid) => {
-      setSelectedGrid(p);
       localStorage.setItem('selectedGridId', p.id);
-      grid.resetWithProduct(p);
+      setSelectedGrid(p);
     },
-    [grid]
+    []
   );
 
   const handleOptionChange = useCallback(
     (p: typeof selectedOption) => {
-      setSelectedOption(p);
       localStorage.setItem('selectedOptionId', p.id);
-      option.resetWithProduct(p);
+      setSelectedOption(p);
     },
-    [option]
+    []
   );
 
   // 数据源检测
@@ -84,14 +82,6 @@ export default function App() {
     }, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  // 品种切换时强制刷新监控页面
-  useEffect(() => {
-    if (activePage === 'monitor') {
-      grid.reset();
-      option.reset();
-    }
-  }, [selectedGrid.id, selectedOption.id, activePage]);
 
   // 查找配对关系
   const crossPair = useMemo(
@@ -127,14 +117,8 @@ export default function App() {
       side: 'grid',
       message: `下单成功: ${product.name}`,
     });
-    const foundProduct = gridProducts.find((p) => p.id === product.id);
-    if (foundProduct) {
-      setSelectedGrid(foundProduct);
-      localStorage.setItem('selectedGridId', foundProduct.id);
-    } else {
-      setSelectedGrid(product);
-      localStorage.setItem('selectedGridId', product.id);
-    }
+    localStorage.setItem('selectedGridId', product.id);
+    setSelectedGrid(product);
     setActivePage('monitor');
   }, [addLog]);
 
@@ -144,14 +128,8 @@ export default function App() {
       side: 'option',
       message: `下单成功: ${product.name}`,
     });
-    const foundProduct = optionProducts.find((p) => p.id === product.id);
-    if (foundProduct) {
-      setSelectedOption(foundProduct);
-      localStorage.setItem('selectedOptionId', foundProduct.id);
-    } else {
-      setSelectedOption(product);
-      localStorage.setItem('selectedOptionId', product.id);
-    }
+    localStorage.setItem('selectedOptionId', product.id);
+    setSelectedOption(product);
     setActivePage('monitor');
   }, [addLog]);
 
