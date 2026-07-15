@@ -200,6 +200,8 @@ export default function App() {
                 isOnline={grid.isOnline}
                 isSimulated={grid.isSimulated}
                 dataSource={grid.dataSource}
+                unrealizedPnl={grid.unrealizedPnl}
+                totalPnl={grid.totalPnl}
               />
 
               <div className="panel-divider" />

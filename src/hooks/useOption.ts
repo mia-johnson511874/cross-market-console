@@ -30,9 +30,17 @@ export function useOption(
   product: OptionProduct,
   addLog: (entry: Omit<TradeLogEntry, 'id'>) => void
 ) {
-  const [state, setState] = useState<OptionState>(() =>
-    initOptionState(product)
-  );
+  const [state, setState] = useState<OptionState>(() => {
+    const saved = localStorage.getItem(`optionState_${product.id}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return initOptionState(product);
+      }
+    }
+    return initOptionState(product);
+  });
 
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
@@ -42,6 +50,10 @@ export function useOption(
   const [optionChain, setOptionChain] = useState<OptionChainData | null>(null);
   const productRef = useRef(product);
   productRef.current = product;
+
+  useEffect(() => {
+    localStorage.setItem(`optionState_${product.id}`, JSON.stringify(state));
+  }, [state, product.id]);
 
   useEffect(() => {
     let mounted = true;

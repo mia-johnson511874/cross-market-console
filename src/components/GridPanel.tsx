@@ -21,6 +21,8 @@ interface GridPanelProps {
   isOnline?: boolean;
   isSimulated?: boolean;
   dataSource?: string;
+  unrealizedPnl?: number;
+  totalPnl?: number;
 }
 
 // 按类别分组
@@ -50,6 +52,8 @@ export default function GridPanel({
   isOnline,
   isSimulated,
   dataSource,
+  unrealizedPnl = 0,
+  totalPnl = 0,
 }: GridPanelProps) {
   const gridLines = getGridLines(selectedProduct, state);
 
@@ -130,6 +134,22 @@ export default function GridPanel({
             className={`status-value ${state.realizedPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}
           >
             ¥{state.realizedPnl.toFixed(2)}
+          </span>
+        </div>
+        <div className="status-item">
+          <span className="status-label">浮动盈亏</span>
+          <span
+            className={`status-value ${unrealizedPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}
+          >
+            ¥{unrealizedPnl.toFixed(2)}
+          </span>
+        </div>
+        <div className="status-item">
+          <span className="status-label">总盈亏</span>
+          <span
+            className={`status-value ${totalPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}
+          >
+            ¥{totalPnl.toFixed(2)}
           </span>
         </div>
         <div className="status-item">

@@ -107,9 +107,10 @@ export function getGridLines(
  */
 export function getPositionPnl(
   state: GridState,
-  product: GridProduct
+  product: GridProduct,
+  livePrice?: number | null
 ): number {
-  const currentPrice = product.grids[state.currentIdx];
+  const currentPrice = livePrice ?? product.grids[state.currentIdx];
   const avgCost = state.capitalUsed / Math.max(state.position, 1);
   return ((currentPrice - avgCost) / avgCost) * 100;
 }

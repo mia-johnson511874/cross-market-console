@@ -19,7 +19,17 @@ export function useGrid(
   product: GridProduct,
   addLog: (entry: Omit<TradeLogEntry, 'id'>) => void
 ) {
-  const [state, setState] = useState<GridState>(() => initGridState(product));
+  const [state, setState] = useState<GridState>(() => {
+    const saved = localStorage.getItem(`gridState_${product.id}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return initGridState(product);
+      }
+    }
+    return initGridState(product);
+  });
   const [error, setError] = useState<string | null>(null);
 
   const [livePrice, setLivePrice] = useState<number | null>(null);
@@ -32,6 +42,10 @@ export function useGrid(
   productRef.current = product;
   
   const prevLivePriceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(`gridState_${product.id}`, JSON.stringify(state));
+  }, [state, product.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -207,6 +221,10 @@ export function useGrid(
 
   const currentPrice = livePrice ?? product.grids[state.currentIdx];
   const capitalRatio = (state.capitalUsed / product.totalCapital) * 100;
+  
+  const avgCost = state.position > 0 ? state.capitalUsed / state.position : 0;
+  const unrealizedPnl = state.position > 0 ? (currentPrice - avgCost) * state.position : 0;
+  const totalPnl = state.realizedPnl + unrealizedPnl;
 
   return {
     state,
@@ -223,5 +241,8 @@ export function useGrid(
     moveUp,
     reset,
     resetWithProduct,
+    unrealizedPnl,
+    totalPnl,
+    avgCost,
   };
 }
