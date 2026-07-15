@@ -39,9 +39,17 @@ export default function App() {
     []
   );
 
-  // 初始品种
-  const [selectedGrid, setSelectedGrid] = useState(() => gridProducts[0]);
-  const [selectedOption, setSelectedOption] = useState(() => optionProducts[0]);
+  // 初始品种 - 从 localStorage 读取上次选择
+  const [selectedGrid, setSelectedGrid] = useState(() => {
+    const savedId = localStorage.getItem('selectedGridId');
+    const saved = gridProducts.find((p) => p.id === savedId);
+    return saved || gridProducts[0];
+  });
+  const [selectedOption, setSelectedOption] = useState(() => {
+    const savedId = localStorage.getItem('selectedOptionId');
+    const saved = optionProducts.find((p) => p.id === savedId);
+    return saved || optionProducts[0];
+  });
 
   // 网格 Hook
   const grid = useGrid(selectedGrid, addLog);
@@ -49,10 +57,11 @@ export default function App() {
   // 期权 Hook
   const option = useOption(selectedOption, addLog);
 
-  // 品种切换处理
+  // 品种切换处理 - 同时保存到 localStorage
   const handleGridChange = useCallback(
     (p: typeof selectedGrid) => {
       setSelectedGrid(p);
+      localStorage.setItem('selectedGridId', p.id);
       grid.resetWithProduct(p);
     },
     [grid]
@@ -61,6 +70,7 @@ export default function App() {
   const handleOptionChange = useCallback(
     (p: typeof selectedOption) => {
       setSelectedOption(p);
+      localStorage.setItem('selectedOptionId', p.id);
       option.resetWithProduct(p);
     },
     [option]
@@ -120,8 +130,10 @@ export default function App() {
     const foundProduct = gridProducts.find((p) => p.id === product.id);
     if (foundProduct) {
       setSelectedGrid(foundProduct);
+      localStorage.setItem('selectedGridId', foundProduct.id);
     } else {
       setSelectedGrid(product);
+      localStorage.setItem('selectedGridId', product.id);
     }
     setActivePage('monitor');
   }, [addLog]);
@@ -135,8 +147,10 @@ export default function App() {
     const foundProduct = optionProducts.find((p) => p.id === product.id);
     if (foundProduct) {
       setSelectedOption(foundProduct);
+      localStorage.setItem('selectedOptionId', foundProduct.id);
     } else {
       setSelectedOption(product);
+      localStorage.setItem('selectedOptionId', product.id);
     }
     setActivePage('monitor');
   }, [addLog]);
