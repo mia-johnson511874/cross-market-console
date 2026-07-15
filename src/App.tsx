@@ -110,9 +110,8 @@ export default function App() {
       message: `下单成功: ${product.name}`,
     });
     setSelectedGrid(product);
-    grid.resetWithProduct(product);
     setActivePage('monitor');
-  }, [addLog, grid]);
+  }, [addLog]);
 
   const handleOptionOrderSubmit = useCallback((product: typeof selectedOption) => {
     addLog({
@@ -121,9 +120,8 @@ export default function App() {
       message: `下单成功: ${product.name}`,
     });
     setSelectedOption(product);
-    option.resetWithProduct(product);
     setActivePage('monitor');
-  }, [addLog, option]);
+  }, [addLog]);
 
   return (
     <div className="app">

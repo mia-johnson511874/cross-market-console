@@ -77,6 +77,17 @@ export function useOption(
   }, [product.id]);
 
   useEffect(() => {
+    setState(initOptionState(product));
+    setLivePrice(null);
+    setOptionChain(null);
+    addLog({
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+      message: `切换期权品种: ${product.name} (${product.code})`,
+      side: 'option',
+    });
+  }, [product.id]);
+
+  useEffect(() => {
     let mounted = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 

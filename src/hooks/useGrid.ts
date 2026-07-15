@@ -66,6 +66,18 @@ export function useGrid(
     checkHealth().then(setIsOnline);
   }, []);
 
+  useEffect(() => {
+    setState(initGridState(product));
+    setError(null);
+    setLivePrice(null);
+    prevLivePriceRef.current = null;
+    addLog({
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+      message: `切换品种: ${product.name} (${product.code})`,
+      side: 'grid',
+    });
+  }, [product.id]);
+
   // 自动网格触发：当实时价格穿越网格线时自动买卖
   useEffect(() => {
     if (livePrice === null || prevLivePriceRef.current === null) {
