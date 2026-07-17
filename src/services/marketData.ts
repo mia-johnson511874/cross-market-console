@@ -216,6 +216,45 @@ export async function fetchOptionChain(underlying: string): Promise<OptionChainR
   return null;
 }
 
+// ============ 期权品种合约链 (跨式/宽跨下单页用) ============
+
+export interface ProductChainContract {
+  code: string;
+  name: string;
+  strike: number;
+  expiry: string;
+  type: string; // "认购" | "认沽"
+  latest_price: number | null;
+  volume: number | null;
+  open_interest: number | null;
+  change_pct: number | null;
+}
+
+export interface ProductChainResponse {
+  id: string;
+  underlying_code: string;
+  underlying_name: string;
+  underlying_price: number | null;
+  expiry_months: string[];
+  contracts: ProductChainContract[];
+  note?: string;
+  error?: string | null;
+}
+
+/** 获取指定期权品种的合约链 (行权价档位 + 到期月 + 实时权利金) */
+export async function fetchOptionProductChain(productId: string): Promise<ProductChainResponse | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+  try {
+    const resp = await fetch(`${API_BASE}/option-products/${encodeURIComponent(productId)}/chain`, { signal: controller.signal });
+    if (resp.ok) return await resp.json();
+  } catch { /* fallback */ } finally {
+    clearTimeout(timeoutId);
+  }
+  return null;
+}
+
 export async function fetchDataSources(): Promise<DataSourcesResponse | null> {
   try {
     const controller = new AbortController();

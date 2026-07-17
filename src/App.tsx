@@ -5,6 +5,7 @@ import GridPanel from './components/GridPanel';
 import OptionPanel from './components/OptionPanel';
 import GridOrderPage from './components/GridOrderPage';
 import OptionOrderPage from './components/OptionOrderPage';
+import StraddleOrderPage, { type StraddleOrder } from './components/StraddleOrderPage';
 import CrossPairNotice from './components/CrossPairNotice';
 import TradeLog from './components/TradeLog';
 import Overview from './components/Overview';
@@ -16,7 +17,7 @@ import { useOption } from './hooks/useOption';
 import { fetchDataSources, type DataSourcesResponse } from './services/marketData';
 import './App.css';
 
-type ActivePage = 'monitor' | 'grid-order' | 'option-order';
+type ActivePage = 'monitor' | 'grid-order' | 'option-order' | 'straddle-order';
 
 export default function App() {
   // 当前活动页面
@@ -133,6 +134,21 @@ export default function App() {
     setActivePage('monitor');
   }, [addLog]);
 
+  const handleStraddleOrderSubmit = useCallback(
+    (product: typeof selectedOption, order: StraddleOrder) => {
+      const structureLabel = order.structure === 'straddle' ? '跨式' : '宽跨式';
+      addLog({
+        time: new Date().toLocaleTimeString(),
+        side: 'option',
+        message: `${structureLabel}下单成功: ${product.name} 买${order.callStrike}C+买${order.putStrike}P ×${order.contracts}张, 净支出¥${order.netDebit.toFixed(2)}, 平衡点 ${order.lowerBreakeven?.toFixed(3) ?? '—'}~${order.upperBreakeven?.toFixed(3) ?? '—'}`,
+      });
+      localStorage.setItem('selectedOptionId', product.id);
+      setSelectedOption(product);
+      setActivePage('monitor');
+    },
+    [addLog]
+  );
+
   return (
     <div className="app">
       <header className="app-header">
@@ -161,6 +177,12 @@ export default function App() {
           >
             📅 期权下单
           </button>
+          <button
+            className={`nav-tab ${activePage === 'straddle-order' ? 'active' : ''}`}
+            onClick={() => setActivePage('straddle-order')}
+          >
+            🎯 跨式/宽跨下单
+          </button>
         </div>
 
         {/* 下单页面 */}
@@ -177,6 +199,13 @@ export default function App() {
             onSubmit={handleOptionOrderSubmit}
             onCancel={() => setActivePage('monitor')}
             livePrice={option.livePrice}
+          />
+        )}
+
+        {activePage === 'straddle-order' && (
+          <StraddleOrderPage
+            onSubmit={handleStraddleOrderSubmit}
+            onCancel={() => setActivePage('monitor')}
           />
         )}
 

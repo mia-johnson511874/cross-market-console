@@ -1454,3 +1454,190 @@ input[type="range"]::-moz-range-thumb {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== 跨式/宽跨下单页 ===== */
+
+.text-muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* 组合指标卡 */
+.straddle-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-card.highlight {
+  border-color: rgba(38, 166, 154, 0.45);
+  background: var(--green-bg);
+}
+
+.metric-card-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.metric-card-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* 链数据源标识 */
+.chain-source {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.chain-source.source-live {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.chain-source.source-sim {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+
+/* 行权价差展示 */
+.strike-gap {
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-weight: 600;
+}
+
+/* 方案对比表 */
+.plan-table-wrapper {
+  overflow-x: auto;
+}
+
+.plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.plan-table th,
+.plan-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.plan-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11.5px;
+  background: var(--bg-secondary);
+}
+
+.plan-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.plan-table .plan-current {
+  background: var(--blue-bg);
+}
+
+.plan-table td {
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.plan-table td.plan-note {
+  font-family: inherit;
+  white-space: normal;
+  max-width: 220px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+
+/* 到期损益图 */
+.payoff-chart {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.payoff-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-tick {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.chart-be {
+  fill: #22c55e;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.chart-spot {
+  fill: #3b82f6;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-pnl {
+  background: #6366f1;
+}
+
+.legend-be {
+  background: #22c55e;
+}
+
+.legend-spot {
+  background: #3b82f6;
+}
+
+@media (max-width: 600px) {
+  .straddle-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+}
