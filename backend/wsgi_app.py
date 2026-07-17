@@ -50,11 +50,11 @@ except Exception:
 # ---- ETF 品种配置 ----
 ETF_PRODUCTS = [
     # ===== 期权标的ETF =====
-    {"id": "a-50etf", "code": "510050", "market": "1", "name": "上证50ETF", "yf_symbol": "QQQ"},
-    {"id": "a-300etf", "code": "510300", "market": "1", "name": "沪深300ETF(沪)", "yf_symbol": "SPY"},
-    {"id": "a-300etf-sz", "code": "159919", "market": "0", "name": "沪深300ETF(深)", "yf_symbol": "SPY"},
-    {"id": "a-500etf", "code": "510500", "market": "1", "name": "中证500ETF", "yf_symbol": "SPY"},
-    {"id": "a-kc50", "code": "588000", "market": "1", "name": "科创50ETF", "yf_symbol": "QQQ"},
+    {"id": "a-50etf", "code": "510050", "market": "1", "name": "上证50ETF", "yf_symbol": "510050.SS"},
+    {"id": "a-300etf", "code": "510300", "market": "1", "name": "沪深300ETF(沪)", "yf_symbol": "510300.SS"},
+    {"id": "a-300etf-sz", "code": "159919", "market": "0", "name": "沪深300ETF(深)", "yf_symbol": "159919.SZ"},
+    {"id": "a-500etf", "code": "510500", "market": "1", "name": "中证500ETF", "yf_symbol": "510500.SS"},
+    {"id": "a-kc50", "code": "588000", "market": "1", "name": "科创50ETF", "yf_symbol": "588000.SS"},
     {"id": "a-hstech", "code": "513130", "market": "1", "name": "恒生科技ETF", "yf_symbol": "QQQ"},
     {"id": "a-hsient", "code": "513220", "market": "1", "name": "恒生互联网ETF", "yf_symbol": "KWEB"},
     {"id": "a-hsient2", "code": "513050", "market": "1", "name": "中概互联ETF", "yf_symbol": "KWEB"},
