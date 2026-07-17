@@ -299,6 +299,8 @@ OPTION_CLIST_PATH = "/api/qt/clist/get"
 OPTION_CLIST_HOSTS = [
     "https://push2.eastmoney.com",
     "http://push2.eastmoney.com",
+    "https://push2delay.eastmoney.com",  # 延时行情节点, 主节点被限流/拦截时兜底
+    "http://push2delay.eastmoney.com",
 ]
 OPTION_FS = "m:10,m:12"
 OPTION_FIELDS = "f12,f13,f14,f2,f3,f5,f6,f17,f18,f108,f161,f162"
@@ -372,6 +374,13 @@ def _fetch_option_page(page: int, page_size: int) -> Optional[dict]:
     return _fetch_option_page_via_requests(page, page_size)
 
 
+def _num(val):
+    """东财延时节点无成交的合约返回 "-", 统一转为 None"""
+    if val is None or val == "-" or val == "":
+        return None
+    return val
+
+
 def _parse_option_name(name: str) -> Optional[dict]:
     """
     解析合约名称, 如 "50ETF购8月2900" / "科创50沽12月1550" / "300ETF购1月4000A"
@@ -424,12 +433,17 @@ def get_option_chain_em(underlying_keyword: str, market: str = "") -> dict:
 
     result = {"expiry_months": [], "contracts": [], "source": "eastmoney", "error": None}
 
-    page_size = 500
+    page_size = 100  # 东财单页实际上限100条, 更大会被截断导致误判翻页结束
     page = 1
     total = None
     items: list[dict] = []
-    while page <= 6:
-        data = _fetch_option_page(page, page_size)
+    while page <= 20:
+        data = None
+        for attempt in range(3):  # 每页最多重试3次, 容忍单页偶发断连
+            data = _fetch_option_page(page, page_size)
+            if data:
+                break
+            time.sleep(0.5)
         if not data:
             break
         d = data.get("data") or {}
@@ -437,7 +451,7 @@ def get_option_chain_em(underlying_keyword: str, market: str = "") -> dict:
             total = d.get("total", 0)
         diff = d.get("diff") or []
         items.extend(diff)
-        if len(diff) < page_size or len(items) >= (total or 0):
+        if not diff or len(items) >= (total or 0):
             break
         page += 1
 
@@ -456,7 +470,7 @@ def get_option_chain_em(underlying_keyword: str, market: str = "") -> dict:
         parsed = _parse_option_name(name)
         if not parsed:
             continue
-        strike = it.get("f161")
+        strike = _num(it.get("f161"))
         if strike is None:
             continue
         days_left = it.get("f162")
@@ -465,14 +479,14 @@ def get_option_chain_em(underlying_keyword: str, market: str = "") -> dict:
         result["contracts"].append({
             "code": str(it.get("f12", "")),
             "name": name,
-            "strike": strike,
+            "strike": _num(it.get("f161")),
             "expiry": expiry,
             "type": parsed["type_label"],
-            "latest_price": it.get("f2"),
-            "volume": it.get("f5"),
-            "open_interest": it.get("f108"),
-            "change_pct": it.get("f3"),
-            "days_left": days_left,
+            "latest_price": _num(it.get("f2")),
+            "volume": _num(it.get("f5")),
+            "open_interest": _num(it.get("f108")),
+            "change_pct": _num(it.get("f3")),
+            "days_left": _num(it.get("f162")),
         })
 
     if result["contracts"]:
