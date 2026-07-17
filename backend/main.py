@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from eastmoney_client import get_etf_snapshot, get_etf_snapshots_batch, get_etf_snapshots_batch_eastmoney
+from eastmoney_client import get_etf_snapshot, get_etf_snapshots_batch, get_etf_snapshots_batch_eastmoney, get_option_chain_em
 from simulated_data import get_simulated_snapshot
 
 # ---- 可选/分层导入 ----
@@ -112,13 +112,13 @@ ETF_PRODUCTS = [
     {"id": "us-cqqq", "code": "CQQQ", "market": "US", "name": "中国科技ETF(美股)", "yf_symbol": "CQQQ"},
 ]
 
-# 期权标的映射
+# 期权标的映射 (em_keyword/em_market 用于东财期权链, ak_name 用于 akshare)
 OPTION_UNDERLYINGS = {
-    "opt-50":   {"code": "510050", "name": "上证50ETF期权", "ak_name": "50ETF"},
-    "opt-300":  {"code": "510300", "name": "沪深300ETF期权(沪)", "ak_name": "300ETF"},
-    "opt-300sz": {"code": "159919", "name": "沪深300ETF期权(深)", "ak_name": "300ETF"},
-    "opt-500":  {"code": "510500", "name": "中证500ETF期权", "ak_name": "500ETF"},
-    "opt-kc50": {"code": "588000", "name": "科创50ETF期权", "ak_name": "科创50"},
+    "opt-50":   {"code": "510050", "name": "上证50ETF期权", "ak_name": "50ETF", "em_keyword": "50ETF", "em_market": "10"},
+    "opt-300":  {"code": "510300", "name": "沪深300ETF期权(沪)", "ak_name": "300ETF", "em_keyword": "300ETF", "em_market": "10"},
+    "opt-300sz": {"code": "159919", "name": "沪深300ETF期权(深)", "ak_name": "300ETF", "em_keyword": "沪深300ETF", "em_market": "12"},
+    "opt-500":  {"code": "510500", "name": "中证500ETF期权", "ak_name": "500ETF", "em_keyword": "500ETF", "em_market": "10"},
+    "opt-kc50": {"code": "588000", "name": "科创50ETF期权", "ak_name": "科创50", "em_keyword": "科创50", "em_market": "10"},
 }
 
 # 商品期货期权 → 期货品种映射
@@ -531,10 +531,22 @@ def get_option_chain(product_id: str):
             "error": None,
         }
 
+        # 第1优先: 东方财富期权链 (不依赖 akshare, 与行情主源一致)
+        try:
+            em_chain = get_option_chain_em(cfg["em_keyword"], cfg["em_market"])
+            if em_chain.get("contracts"):
+                result["expiry_months"] = em_chain.get("expiry_months", [])
+                result["contracts"] = em_chain.get("contracts", [])
+                result["chain_source"] = "eastmoney"
+                return result
+        except Exception as e:
+            logger.warning(f"eastmoney option chain failed for {product_id}: {e}")
+
         if _has_akshare:
             chain_data = get_option_chain_with_prices(cfg["code"], cfg["ak_name"])
             result["expiry_months"] = chain_data.get("expiry_months", [])
             result["contracts"] = chain_data.get("contracts", [])
+            result["chain_source"] = "akshare"
             if chain_data.get("error"):
                 result["error"] = chain_data["error"]
         else:
@@ -618,6 +630,26 @@ def get_option_chain_by_underlying(underlying: str):
         "source": "simulated",
         "simulated": True,
     }
+
+    # 第1优先: 东方财富期权链 (不依赖 akshare)
+    em_map: Dict[str, tuple] = {
+        "50ETF": ("50ETF", "10"),
+        "300ETF": ("300ETF", ""),
+        "500ETF": ("500ETF", "10"),
+        "KC50ETF": ("科创50", "10"),
+    }
+    em_cfg = em_map.get(underlying)
+    if em_cfg:
+        try:
+            em_chain = get_option_chain_em(em_cfg[0], em_cfg[1])
+            if em_chain.get("contracts"):
+                result["expiry_months"] = em_chain.get("expiry_months", [])
+                result["contracts"] = em_chain.get("contracts", [])
+                result["source"] = "eastmoney"
+                result["simulated"] = False
+                return result
+        except Exception as e:
+            logger.warning(f"eastmoney option chain failed for {underlying}: {e}")
 
     if _has_akshare:
         try:

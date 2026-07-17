@@ -23,7 +23,7 @@ from data import crossPairs
 
 # 尝试导入真实行情客户端
 try:
-    from eastmoney_client import get_etf_snapshot
+    from eastmoney_client import get_etf_snapshot, get_option_chain_em
     _has_eastmoney = True
 except Exception:
     _has_eastmoney = False
@@ -84,13 +84,13 @@ ETF_PRODUCTS = [
     {"id": "us-cqqq", "code": "CQQQ", "market": "US", "name": "中国科技ETF(美股)", "yf_symbol": "CQQQ"},
 ]
 
-# 期权标的映射
+# 期权标的映射 (em_keyword/em_market 用于东财期权链, ak_name 用于 akshare)
 OPTION_UNDERLYINGS = {
-    "opt-50":   {"code": "510050", "name": "上证50ETF期权", "ak_name": "50ETF"},
-    "opt-300":  {"code": "510300", "name": "沪深300ETF期权(沪)", "ak_name": "300ETF"},
-    "opt-300sz": {"code": "159919", "name": "沪深300ETF期权(深)", "ak_name": "300ETF"},
-    "opt-500":  {"code": "510500", "name": "中证500ETF期权", "ak_name": "500ETF"},
-    "opt-kc50": {"code": "588000", "name": "科创50ETF期权", "ak_name": "科创50"},
+    "opt-50":   {"code": "510050", "name": "上证50ETF期权", "ak_name": "50ETF", "em_keyword": "50ETF", "em_market": "10"},
+    "opt-300":  {"code": "510300", "name": "沪深300ETF期权(沪)", "ak_name": "300ETF", "em_keyword": "300ETF", "em_market": "10"},
+    "opt-300sz": {"code": "159919", "name": "沪深300ETF期权(深)", "ak_name": "300ETF", "em_keyword": "沪深300ETF", "em_market": "12"},
+    "opt-500":  {"code": "510500", "name": "中证500ETF期权", "ak_name": "500ETF", "em_keyword": "500ETF", "em_market": "10"},
+    "opt-kc50": {"code": "588000", "name": "科创50ETF期权", "ak_name": "科创50", "em_keyword": "科创50", "em_market": "10"},
 }
 
 COMMODITY_OPTIONS = {
@@ -327,11 +327,24 @@ def route_api(path: str, qs: str = "") -> tuple:
                 "underlying_price": snap.get("price") if "error" not in snap else None,
                 "expiry_months": [], "contracts": [], "error": None,
             }
+            # 第1优先: 东方财富期权链 (不依赖 akshare)
+            if _has_eastmoney:
+                try:
+                    em_chain = get_option_chain_em(cfg["em_keyword"], cfg["em_market"])
+                    if em_chain.get("contracts"):
+                        result["expiry_months"] = em_chain.get("expiry_months", [])
+                        result["contracts"] = em_chain.get("contracts", [])
+                        result["chain_source"] = "eastmoney"
+                        return json_response(result)
+                except Exception:
+                    pass
+            # 第2优先: akshare 期权链
             if _has_akshare:
                 try:
                     chain_data = get_option_chain_with_prices(cfg["code"], cfg["ak_name"])
                     result["expiry_months"] = chain_data.get("expiry_months", [])
                     result["contracts"] = chain_data.get("contracts", [])
+                    result["chain_source"] = "akshare"
                     if chain_data.get("error"):
                         result["error"] = chain_data["error"]
                 except Exception:

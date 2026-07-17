@@ -287,3 +287,199 @@ def get_index_snapshot(code: str, market: str = "1") -> dict:
         "prev_close": d.get("f60", 0),
         "change_pct": d.get("f170", 0) / 100 if d.get("f170") else 0,
     }
+
+
+# ==================== 期权实时行情 (东财, 不依赖 akshare) ====================
+# 数据源: 东方财富-行情中心-期权市场 https://quote.eastmoney.com/center/qqsc.html
+# fs=m:10(上交所期权) m:12(深交所期权)
+# 字段: f12代码 f13市场 f14名称 f2最新价 f3涨跌幅 f5成交量 f6成交额
+#       f17今开 f18昨结 f108持仓量 f161行权价 f162剩余日
+
+OPTION_CLIST_PATH = "/api/qt/clist/get"
+OPTION_CLIST_HOSTS = [
+    "https://push2.eastmoney.com",
+    "http://push2.eastmoney.com",
+]
+OPTION_FS = "m:10,m:12"
+OPTION_FIELDS = "f12,f13,f14,f2,f3,f5,f6,f17,f18,f108,f161,f162"
+_OPTION_UT = "bd1d9ddb04089700cf9c27f6f7426281"
+_option_cache: dict[str, dict] = {}
+_OPTION_CACHE_TTL = 60  # 期权链缓存60秒
+
+_OPTION_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://quote.eastmoney.com/center/qqsc.html",
+}
+
+
+def _option_url(host: str, page: int, page_size: int) -> str:
+    return (
+        f"{host}{OPTION_CLIST_PATH}?pn={page}&pz={page_size}&po=1&np=1"
+        f"&ut={_OPTION_UT}&fltt=2&invt=2&fid=f3"
+        f"&fs={OPTION_FS}&fields={OPTION_FIELDS}"
+    )
+
+
+def _fetch_option_page_via_urllib(page: int, page_size: int) -> Optional[dict]:
+    """urllib 直连 (绕过系统代理), https 失败自动降级 http"""
+    for host in OPTION_CLIST_HOSTS:
+        try:
+            ssl_ctx = ssl.create_default_context()
+            opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({}),
+                urllib.request.HTTPSHandler(context=ssl_ctx),
+            )
+            req = urllib.request.Request(
+                _option_url(host, page, page_size), headers=_OPTION_HEADERS
+            )
+            resp = opener.open(req, timeout=3)
+            data = json.loads(resp.read())
+            if data.get("rc") == 0 and data.get("data"):
+                return data
+        except Exception:
+            continue
+    return None
+
+
+def _fetch_option_page_via_requests(page: int, page_size: int) -> Optional[dict]:
+    """requests 通道, 显式禁用代理"""
+    for host in OPTION_CLIST_HOSTS:
+        try:
+            resp = requests.get(
+                _option_url(host, page, page_size),
+                headers=_OPTION_HEADERS,
+                timeout=3,
+                proxies={"http": None, "https": None},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("rc") == 0 and data.get("data"):
+                return data
+        except Exception:
+            continue
+    return None
+
+
+def _fetch_option_page(page: int, page_size: int) -> Optional[dict]:
+    """双通道获取一页期权行情"""
+    data = _fetch_option_page_via_urllib(page, page_size)
+    if data:
+        return data
+    return _fetch_option_page_via_requests(page, page_size)
+
+
+def _parse_option_name(name: str) -> Optional[dict]:
+    """
+    解析合约名称, 如 "50ETF购8月2900" / "科创50沽12月1550" / "300ETF购1月4000A"
+    返回 {type, month, type_label}
+    """
+    import re
+
+    m = re.match(r"^.+?(购|沽)(\d{1,2})月(\d+)(A?)$", name)
+    if not m:
+        return None
+    return {
+        "type_label": "认购" if m.group(1) == "购" else "认沽",
+        "month": int(m.group(2)),
+    }
+
+
+def _expiry_yyyymm(month: int, days_left: Optional[float]) -> str:
+    """由合约月份推算 YYYYMM (期权仅挂牌近几个月, 小于当前月即为明年)"""
+    now = time.localtime()
+    year = now.tm_year
+    if month < now.tm_mon:
+        year += 1
+    elif month == now.tm_mon and days_left is not None and days_left <= 0:
+        year += 1
+    return f"{year}{month:02d}"
+
+
+def get_option_chain_em(underlying_keyword: str, market: str = "") -> dict:
+    """
+    东方财富 期权实时行情链 (akshare 的替代数据源)
+
+    Args:
+        underlying_keyword: 合约名称前缀, 如 "50ETF", "300ETF", "500ETF", "科创50"
+        market: ""=全部, "10"=仅上交所, "12"=仅深交所
+
+    Returns:
+        {
+          "expiry_months": ["202508", ...],
+          "contracts": [{code, name, strike, expiry, type, latest_price,
+                         volume, open_interest, change_pct, days_left}],
+          "source": "eastmoney",
+          "error": None | str,
+        }
+    """
+    cache_key = f"optchain_{underlying_keyword}_{market}"
+    now = time.time()
+    cached = _option_cache.get(cache_key)
+    if cached and (now - cached.get("_ts", 0)) < _OPTION_CACHE_TTL:
+        return {k: v for k, v in cached.items() if k != "_ts"}
+
+    result = {"expiry_months": [], "contracts": [], "source": "eastmoney", "error": None}
+
+    page_size = 500
+    page = 1
+    total = None
+    items: list[dict] = []
+    while page <= 6:
+        data = _fetch_option_page(page, page_size)
+        if not data:
+            break
+        d = data.get("data") or {}
+        if total is None:
+            total = d.get("total", 0)
+        diff = d.get("diff") or []
+        items.extend(diff)
+        if len(diff) < page_size or len(items) >= (total or 0):
+            break
+        page += 1
+
+    if not items:
+        result["error"] = "eastmoney option chain unavailable"
+        return result
+
+    for it in items:
+        name = str(it.get("f14", ""))
+        if not name.startswith(underlying_keyword):
+            continue
+        f13 = str(it.get("f13", ""))
+        if market and f13 != market:
+            continue
+
+        parsed = _parse_option_name(name)
+        if not parsed:
+            continue
+        strike = it.get("f161")
+        if strike is None:
+            continue
+        days_left = it.get("f162")
+        expiry = _expiry_yyyymm(parsed["month"], days_left)
+
+        result["contracts"].append({
+            "code": str(it.get("f12", "")),
+            "name": name,
+            "strike": strike,
+            "expiry": expiry,
+            "type": parsed["type_label"],
+            "latest_price": it.get("f2"),
+            "volume": it.get("f5"),
+            "open_interest": it.get("f108"),
+            "change_pct": it.get("f3"),
+            "days_left": days_left,
+        })
+
+    if result["contracts"]:
+        result["expiry_months"] = sorted({c["expiry"] for c in result["contracts"]})
+    else:
+        result["error"] = f"no contracts matched {underlying_keyword}"
+
+    result["_ts"] = now
+    _option_cache[cache_key] = result
+    return {k: v for k, v in result.items() if k != "_ts"}
