@@ -414,25 +414,6 @@ export function generateAdjustmentPlans(ctx: PlanContext): AdjustmentPlan[] {
     metrics: computePosition({ ...base, legs: legs3 }),
   });
 
-  // 方案4: 卖外侧收权利金 (保留原组合 + 卖出更低PUT/更高CALL)
-  const sellPutK = stepStrike(strikes, putStrike, -1);
-  const sellCallK = stepStrike(strikes, callStrike, 1);
-  const legs4: OptionLeg[] = [
-    { side: 'buy', type: 'call', strike: callStrike, premium: callPremium },
-    { side: 'buy', type: 'put', strike: putStrike, premium: putPremium },
-    { side: 'sell', type: 'put', strike: sellPutK, premium: price(sellPutK, 'put') },
-    { side: 'sell', type: 'call', strike: sellCallK, premium: price(sellCallK, 'call') },
-  ];
-  plans.push({
-    id: 'sell-wings',
-    title: '④ 卖外侧收权利金',
-    description: `保留 ${callStrike}C+${putStrike}P, 加卖 ${sellPutK}P + ${sellCallK}C 收权利金`,
-    note: '净支出大降, 平衡点显著收窄; 代价是两端收益封顶, 不再无限盈利',
-    applicable: false, // 四腿结构, 仅展示不下单
-    legs: legs4,
-    metrics: computePosition({ ...base, legs: legs4 }),
-  });
-
   return plans;
 }
 
@@ -563,38 +544,6 @@ export function generateExpertAdvice(ctx: PlanContext): ExpertAdvice {
       );
     }
   }
-
-  // 铁鹰(Iron Condor): 内档宽跨买入 + 外档宽跨卖出, 收权利金降成本
-  for (let inner = 1; inner <= 2; inner++) {
-    const outer = inner + 2;
-    const buyCallK = stepFromAtm(strikes, atm, inner);
-    const buyPutK = stepFromAtm(strikes, atm, -inner);
-    const sellCallK = stepFromAtm(strikes, atm, outer);
-    const sellPutK = stepFromAtm(strikes, atm, -outer);
-    const legs: OptionLeg[] = [
-      { side: 'buy', type: 'call', strike: buyCallK, premium: price(buyCallK, 'call') },
-      { side: 'buy', type: 'put', strike: buyPutK, premium: price(buyPutK, 'put') },
-      { side: 'sell', type: 'put', strike: sellPutK, premium: price(sellPutK, 'put') },
-      { side: 'sell', type: 'call', strike: sellCallK, premium: price(sellCallK, 'call') },
-    ];
-    candidates.push(
-      make(`iron-condor-${inner}`, `铁鹰 (内±${inner}/外±${outer})`, '铁鹰价差', legs, '卖外档收权利金, 净支出大降; 两端收益封顶, 适合低波动预期')
-    );
-  }
-
-  // 铁蝶(Iron Butterfly): 平值跨式买入 + 两侧外档卖出
-  const wing = 2;
-  const sellCallW = stepFromAtm(strikes, atm, wing);
-  const sellPutW = stepFromAtm(strikes, atm, -wing);
-  const ibLegs: OptionLeg[] = [
-    { side: 'buy', type: 'call', strike: atm, premium: price(atm, 'call') },
-    { side: 'buy', type: 'put', strike: atm, premium: price(atm, 'put') },
-    { side: 'sell', type: 'put', strike: sellPutW, premium: price(sellPutW, 'put') },
-    { side: 'sell', type: 'call', strike: sellCallW, premium: price(sellCallW, 'call') },
-  ];
-  candidates.push(
-    make('iron-butterfly', '铁蝶 (平值跨式+卖±2档)', '铁蝶价差', ibLegs, '平值处收益最大, 权利金大幅降低且收益封顶')
-  );
 
   candidates.sort((a, b) => b.rewardRisk - a.rewardRisk);
 
