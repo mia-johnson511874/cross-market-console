@@ -2,6 +2,11 @@ import { useState, useCallback, useMemo } from 'react';
 import type { OptionProduct } from '../data/optionProducts';
 import { optionProducts, marketTypeLabels } from '../data/optionProducts';
 import type { Greeks } from '../data/optionProducts';
+import {
+  generateCalendarExpertAdvice,
+  type CalendarExpertAdvice,
+  type CalendarCandidate,
+} from '../utils/calendarEngine';
 
 interface OptionOrderPageProps {
   onSubmit: (product: OptionProduct, order: OptionOrder) => void;
@@ -125,6 +130,36 @@ export default function OptionOrderPage({ onSubmit, onCancel, livePrice }: Optio
     },
   ], [nearStrike, nearCallPremium, nearPutPremium, farStrike, farCallCost, farPutCost]);
 
+  const fmtMoney = (v: number) =>
+    `¥${v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const expertAdvice = useMemo<CalendarExpertAdvice>(
+    () =>
+      generateCalendarExpertAdvice({
+        underlyingPrice: livePrice ?? selectedProduct.price,
+        baseStrike: nearStrike,
+        daysNear: daysToNear,
+        daysFar: daysToFar,
+        contracts: contractCount,
+        pointValue: selectedProduct.pointValue,
+        nearCallPremium,
+        nearPutPremium,
+        farCallCost,
+        farPutCost,
+      }),
+    [livePrice, selectedProduct, nearStrike, daysToNear, daysToFar, contractCount, nearCallPremium, nearPutPremium, farCallCost, farPutCost]
+  );
+
+  const applyCalendarCandidate = useCallback((c: CalendarCandidate) => {
+    setNearStrike(c.strike);
+    setFarStrike(c.strike);
+    setDaysToNear(c.daysNear);
+    setDaysToNearFar(c.daysFar);
+    setNearCallPremium(c.nearCall);
+    setNearPutPremium(c.nearPut);
+    setFarCallCost(c.farCall);
+    setFarPutCost(c.farPut);
+  }, []);
   const handleSubmit = () => {
     setConfirmModal(true);
   };
@@ -414,6 +449,81 @@ export default function OptionOrderPage({ onSubmit, onCancel, livePrice }: Optio
           </div>
         </div>
 
+        {/* ============ 专家建议 ============ */}
+        <div className="order-section expert-section">
+          <h3>🧠 专家建议 · 权利金最小 / 到期收益最大 / 综合最优</h3>
+          <p className="expert-reasoning">{expertAdvice.reasoning}</p>
+          <div className="straddle-metrics expert-cards">
+            {[
+              { label: '① 权利金最小', c: expertAdvice.bestPremium, recommended: false },
+              { label: '② 到期收益最大', c: expertAdvice.bestProfit, recommended: false },
+              { label: '③ 综合最优 (专家推荐)', c: expertAdvice.bestOverall, recommended: true },
+            ].map(({ label, c, recommended }) => (
+              <div key={label} className={`metric-card expert-card${recommended ? ' highlight' : ''}`}>
+                <span className="metric-card-label">{label}</span>
+                <span className="metric-card-value">{c.title}</span>
+                <div className="expert-card-meta">
+                  <span>
+                    净权利金{' '}
+                    <b className={c.netPremium >= 0 ? 'pnl-positive' : 'pnl-negative'}>
+                      {c.netPremium >= 0 ? '+' : ''}{fmtMoney(c.netPremiumTotal)}
+                    </b>
+                  </span>
+                  <span>
+                    近月到期预期{' '}
+                    <b className={c.projectedProfit >= 0 ? 'pnl-positive' : 'pnl-negative'}>
+                      {fmtMoney(c.projectedProfit)}
+                    </b>
+                  </span>
+                  <span>风险收益比 <b>{c.rewardRisk.toFixed(2)}</b></span>
+                </div>
+                <button className="btn btn-small" onClick={() => applyCalendarCandidate(c)}>
+                  应用到表单
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="plan-table-wrapper">
+            <table className="plan-table">
+              <thead>
+                <tr>
+                  <th>方案</th>
+                  <th>行权价</th>
+                  <th>近/远天数</th>
+                  <th>净权利金</th>
+                  <th>预期收益</th>
+                  <th>最大亏损</th>
+                  <th>风险收益比</th>
+                  <th>特点</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expertAdvice.candidates.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.title}</td>
+                    <td>{c.strike.toFixed(selectedProduct.price > 100 ? 0 : 2)}</td>
+                    <td>{c.daysNear}/{c.daysFar}</td>
+                    <td className={c.netPremium >= 0 ? 'pnl-positive' : 'pnl-negative'}>
+                      {c.netPremium >= 0 ? '+' : ''}{fmtMoney(c.netPremiumTotal)}
+                    </td>
+                    <td className={c.projectedProfit >= 0 ? 'pnl-positive' : 'pnl-negative'}>
+                      {fmtMoney(c.projectedProfit)}
+                    </td>
+                    <td className="pnl-negative">{fmtMoney(c.maxLoss)}</td>
+                    <td>{c.rewardRisk.toFixed(2)}</td>
+                    <td className="plan-note">{c.note}</td>
+                    <td>
+                      <button className="btn btn-small" onClick={() => applyCalendarCandidate(c)}>
+                        应用
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
         <div className="order-section">
           <h3>下单预览</h3>
           <div className="preview-table">

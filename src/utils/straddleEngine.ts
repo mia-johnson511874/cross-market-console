@@ -436,6 +436,188 @@ export function generateAdjustmentPlans(ctx: PlanContext): AdjustmentPlan[] {
   return plans;
 }
 
+
+// ==================== 专家建议 (权利金最小 / 到期收益最大) ====================
+
+export interface ExpertCandidate {
+  id: string;
+  title: string;
+  structureLabel: string;
+  legs: OptionLeg[];
+  metrics: PositionMetrics;
+  netDebit: number;
+  maxLoss: number;
+  maxProfit: number;
+  profitCapped: boolean;
+  projectedProfit: number;
+  rewardRisk: number;
+  breakevenWidth: number | null;
+  note: string;
+}
+
+export interface ExpertAdvice {
+  expectedMovePct: number;
+  bestPremium: ExpertCandidate;
+  bestProfit: ExpertCandidate;
+  bestOverall: ExpertCandidate;
+  reasoning: string;
+  candidates: ExpertCandidate[];
+}
+
+function stepFromAtm(strikes: number[], atm: number, steps: number): number {
+  if (steps === 0) return atm;
+  const idx = strikes.findIndex((s) => Math.abs(s - atm) < 1e-9);
+  if (idx < 0) return atm;
+  const target = Math.min(Math.max(idx + steps, 0), strikes.length - 1);
+  return strikes[target];
+}
+
+export function expectedMovePct(iv: number, daysToExpiry: number): number {
+  const T = Math.max(daysToExpiry, 1) / 365;
+  return iv * Math.sqrt(T) * 100;
+}
+
+export function generateExpertAdvice(ctx: PlanContext): ExpertAdvice {
+  const {
+    underlyingPrice: S,
+    callStrike,
+    putStrike,
+    callPremium,
+    putPremium,
+    strikes,
+    contracts,
+    pointValue,
+    daysToExpiry,
+    lookupPremium,
+  } = ctx;
+
+  const ivC = impliedVol('call', callPremium, S, callStrike, daysToExpiry);
+  const ivP = impliedVol('put', putPremium, S, putStrike, daysToExpiry);
+  const iv = ivC ?? ivP ?? DEFAULT_IV;
+
+  const atm = nearestStrike(strikes, S);
+  const multiplier = contracts * pointValue;
+  const movePct = expectedMovePct(iv, daysToExpiry);
+  const upPrice = S * (1 + movePct / 100);
+  const downPrice = S * (1 - movePct / 100);
+
+  const price = (strike: number, type: 'call' | 'put'): number => {
+    const fromChain = lookupPremium(strike, type);
+    if (fromChain !== null && fromChain > 0) return fromChain;
+    return Math.round(bsPrice(type, S, strike, daysToExpiry, iv) * 10000) / 10000;
+  };
+
+  const base = { contracts, pointValue, daysToExpiry, iv, underlyingPrice: S };
+
+  const projectedProfit = (legs: OptionLeg[]): number => {
+    const debit = legs.reduce((s, l) => s + (l.side === 'buy' ? l.premium : -l.premium), 0);
+    const up = intrinsicPayoff(legs, upPrice) - debit;
+    const down = intrinsicPayoff(legs, downPrice) - debit;
+    return ((up + down) / 2) * multiplier;
+  };
+
+  const make = (
+    id: string,
+    title: string,
+    structureLabel: string,
+    legs: OptionLeg[],
+    note: string
+  ): ExpertCandidate => {
+    const metrics = computePosition({ ...base, legs });
+    const pp = projectedProfit(legs);
+    const rr = metrics.maxLoss > 1e-9 ? pp / metrics.maxLoss : pp > 0 ? 999 : 0;
+    return {
+      id,
+      title,
+      structureLabel,
+      legs,
+      metrics,
+      netDebit: metrics.netDebit,
+      maxLoss: metrics.maxLoss,
+      maxProfit: metrics.maxProfit,
+      profitCapped: metrics.profitCapped,
+      projectedProfit: Math.round(pp * 100) / 100,
+      rewardRisk: Math.round(rr * 1000) / 1000,
+      breakevenWidth: metrics.intervalWidth,
+      note,
+    };
+  };
+
+  const candidates: ExpertCandidate[] = [];
+
+  // 多头跨式 / 宽跨式候选 (0..3 档)
+  for (let step = 0; step <= 3; step++) {
+    const cs = stepFromAtm(strikes, atm, step);
+    const ps = stepFromAtm(strikes, atm, -step);
+    const legs: OptionLeg[] = [
+      { side: 'buy', type: 'call', strike: cs, premium: price(cs, 'call') },
+      { side: 'buy', type: 'put', strike: ps, premium: price(ps, 'put') },
+    ];
+    if (step === 0) {
+      candidates.push(
+        make('long-straddle-atm', '平值跨式', '多头跨式', legs, '行权价差=0, Gamma最大; 任一方向波动即盈利, 权利金最贵')
+      );
+    } else {
+      candidates.push(
+        make(`long-strangle-${step}`, `宽跨式 ±${step}档`, '多头宽跨式', legs, '权利金逐档降低; 但平衡点更宽, 需更大波动才盈利')
+      );
+    }
+  }
+
+  // 铁鹰(Iron Condor): 内档宽跨买入 + 外档宽跨卖出, 收权利金降成本
+  for (let inner = 1; inner <= 2; inner++) {
+    const outer = inner + 2;
+    const buyCallK = stepFromAtm(strikes, atm, inner);
+    const buyPutK = stepFromAtm(strikes, atm, -inner);
+    const sellCallK = stepFromAtm(strikes, atm, outer);
+    const sellPutK = stepFromAtm(strikes, atm, -outer);
+    const legs: OptionLeg[] = [
+      { side: 'buy', type: 'call', strike: buyCallK, premium: price(buyCallK, 'call') },
+      { side: 'buy', type: 'put', strike: buyPutK, premium: price(buyPutK, 'put') },
+      { side: 'sell', type: 'put', strike: sellPutK, premium: price(sellPutK, 'put') },
+      { side: 'sell', type: 'call', strike: sellCallK, premium: price(sellCallK, 'call') },
+    ];
+    candidates.push(
+      make(`iron-condor-${inner}`, `铁鹰 (内±${inner}/外±${outer})`, '铁鹰价差', legs, '卖外档收权利金, 净支出大降; 两端收益封顶, 适合低波动预期')
+    );
+  }
+
+  // 铁蝶(Iron Butterfly): 平值跨式买入 + 两侧外档卖出
+  const wing = 2;
+  const sellCallW = stepFromAtm(strikes, atm, wing);
+  const sellPutW = stepFromAtm(strikes, atm, -wing);
+  const ibLegs: OptionLeg[] = [
+    { side: 'buy', type: 'call', strike: atm, premium: price(atm, 'call') },
+    { side: 'buy', type: 'put', strike: atm, premium: price(atm, 'put') },
+    { side: 'sell', type: 'put', strike: sellPutW, premium: price(sellPutW, 'put') },
+    { side: 'sell', type: 'call', strike: sellCallW, premium: price(sellCallW, 'call') },
+  ];
+  candidates.push(
+    make('iron-butterfly', '铁蝶 (平值跨式+卖±2档)', '铁蝶价差', ibLegs, '平值处收益最大, 权利金大幅降低且收益封顶')
+  );
+
+  candidates.sort((a, b) => b.rewardRisk - a.rewardRisk);
+
+  const bestPremium = candidates.reduce((a, b) => (b.netDebit < a.netDebit ? b : a));
+  const bestProfit = candidates.reduce((a, b) => (b.projectedProfit > a.projectedProfit ? b : a));
+  const bestOverall = candidates[0];
+
+  const reasoning =
+    `基于 IV≈${(iv * 100).toFixed(1)}% 与剩余 ${daysToExpiry} 天, 标的 1σ 预期波动约 ±${movePct.toFixed(1)}%。` +
+    `权利金最小为「${bestPremium.title}」(净支出¥${bestPremium.netDebit.toFixed(0)}); ` +
+    `到期预期收益最大为「${bestProfit.title}」(¥${bestProfit.projectedProfit.toFixed(0)}); ` +
+    `综合风险收益比最优(专家推荐)为「${bestOverall.title}」, 风险收益比 ${bestOverall.rewardRisk.toFixed(2)}。`;
+
+  return {
+    expectedMovePct: movePct,
+    bestPremium,
+    bestProfit,
+    bestOverall,
+    reasoning,
+    candidates,
+  };
+}
+
 // ==================== 到期日工具 ====================
 
 /** 由到期月份(YYYYMM)估算剩余天数 (上交所ETF期权: 到期月第4个周三) */

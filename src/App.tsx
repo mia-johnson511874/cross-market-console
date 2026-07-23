@@ -175,13 +175,13 @@ export default function App() {
             className={`nav-tab ${activePage === 'option-order' ? 'active' : ''}`}
             onClick={() => setActivePage('option-order')}
           >
-            📅 期权下单
+            📅 双日历价差期权
           </button>
           <button
             className={`nav-tab ${activePage === 'straddle-order' ? 'active' : ''}`}
             onClick={() => setActivePage('straddle-order')}
           >
-            🎯 跨式/宽跨下单
+            🎯 跨式期权
           </button>
         </div>
 

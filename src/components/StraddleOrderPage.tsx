@@ -14,6 +14,7 @@ import {
 import {
   computePosition,
   generateAdjustmentPlans,
+  generateExpertAdvice,
   daysToExpiryMonth,
   fallbackExpiryMonths,
   fallbackStrikes,
@@ -22,6 +23,8 @@ import {
   straddleSelfTest,
   type OptionLeg,
   type PayoffPoint,
+  type ExpertAdvice,
+  type ExpertCandidate,
 } from '../utils/straddleEngine';
 
 interface StraddleOrderPageProps {
@@ -425,6 +428,37 @@ export default function StraddleOrderPage({ onSubmit, onCancel }: StraddleOrderP
     [S, callStrike, putStrike, callPrem, putPrem, strikes, contracts, product.pointValue, daysToExpiry, lookupPremium]
   );
 
+  // 专家建议: 扫描候选组合, 给出权利金最小/到期收益最大/综合最优三档推荐
+  const expertAdvice = useMemo<ExpertAdvice>(
+    () =>
+      generateExpertAdvice({
+        underlyingPrice: S,
+        callStrike,
+        putStrike,
+        callPremium: callPrem,
+        putPremium: putPrem,
+        strikes,
+        contracts,
+        pointValue: product.pointValue,
+        daysToExpiry,
+        lookupPremium,
+      }),
+    [S, callStrike, putStrike, callPrem, putPrem, strikes, contracts, product.pointValue, daysToExpiry, lookupPremium]
+  );
+
+  // 一键应用专家候选(仅2腿多头跨式/宽跨式可直接套入下单表单)
+  const applyExpertCandidate = useCallback((c: ExpertCandidate) => {
+    const call = c.legs.find((l) => l.side === 'buy' && l.type === 'call');
+    const put = c.legs.find((l) => l.side === 'buy' && l.type === 'put');
+    if (!call || !put) return;
+    setCallStrike(call.strike);
+    setPutStrike(put.strike);
+    setCallPrem(call.premium);
+    setPutPrem(put.premium);
+    setMode(Math.abs(call.strike - put.strike) < 1e-9 ? 'straddle' : 'strangle');
+  }, []);
+  const isExpertApplicable = (c: ExpertCandidate) =>
+    c.legs.length === 2 && c.legs.every((l) => l.side === 'buy');
   // 现价到最近平衡点所需波动幅度
   const requiredMovePct = useMemo(() => {
     const moves: number[] = [];
@@ -744,6 +778,87 @@ export default function StraddleOrderPage({ onSubmit, onCancel }: StraddleOrderP
           </div>
         </div>
 
+        {/* ============ 专家建议 ============ */}
+        <div className="order-section expert-section">
+          <h3>🧠 专家建议 · 权利金最小 / 到期收益最大 / 综合最优</h3>
+          <p className="expert-reasoning">{expertAdvice.reasoning}</p>
+          <div className="straddle-metrics expert-cards">
+            <div className="metric-card expert-card highlight">
+              <span className="metric-card-label">① 权利金最小</span>
+              <span className="metric-card-value">{expertAdvice.bestPremium.title}</span>
+              <div className="expert-card-meta">
+                <span>净支出 <b className="pnl-negative">{fmtMoney(expertAdvice.bestPremium.netDebit)}</b></span>
+                <span>预期收益 <b className={expertAdvice.bestPremium.projectedProfit >= 0 ? 'pnl-positive' : 'pnl-negative'}>{fmtMoney(expertAdvice.bestPremium.projectedProfit)}</b></span>
+                <span>风险收益比 <b>{expertAdvice.bestPremium.rewardRisk.toFixed(2)}</b></span>
+              </div>
+              {isExpertApplicable(expertAdvice.bestPremium) && (
+                <button className="btn btn-small" onClick={() => applyExpertCandidate(expertAdvice.bestPremium)}>应用到表单</button>
+              )}
+            </div>
+            <div className="metric-card expert-card">
+              <span className="metric-card-label">② 到期收益最大</span>
+              <span className="metric-card-value">{expertAdvice.bestProfit.title}</span>
+              <div className="expert-card-meta">
+                <span>净支出 <b className="pnl-negative">{fmtMoney(expertAdvice.bestProfit.netDebit)}</b></span>
+                <span>预期收益 <b className="pnl-positive">{fmtMoney(expertAdvice.bestProfit.projectedProfit)}</b></span>
+                <span>风险收益比 <b>{expertAdvice.bestProfit.rewardRisk.toFixed(2)}</b></span>
+              </div>
+              {isExpertApplicable(expertAdvice.bestProfit) && (
+                <button className="btn btn-small" onClick={() => applyExpertCandidate(expertAdvice.bestProfit)}>应用到表单</button>
+              )}
+            </div>
+            <div className="metric-card expert-card highlight">
+              <span className="metric-card-label">③ 综合最优 (专家推荐)</span>
+              <span className="metric-card-value">{expertAdvice.bestOverall.title}</span>
+              <div className="expert-card-meta">
+                <span>净支出 <b className="pnl-negative">{fmtMoney(expertAdvice.bestOverall.netDebit)}</b></span>
+                <span>预期收益 <b className={expertAdvice.bestOverall.projectedProfit >= 0 ? 'pnl-positive' : 'pnl-negative'}>{fmtMoney(expertAdvice.bestOverall.projectedProfit)}</b></span>
+                <span>风险收益比 <b>{expertAdvice.bestOverall.rewardRisk.toFixed(2)}</b></span>
+              </div>
+              {isExpertApplicable(expertAdvice.bestOverall) && (
+                <button className="btn btn-small btn-submit" onClick={() => applyExpertCandidate(expertAdvice.bestOverall)}>应用到表单</button>
+              )}
+            </div>
+          </div>
+          <div className="plan-table-wrapper">
+            <table className="plan-table">
+              <thead>
+                <tr>
+                  <th>组合</th>
+                  <th>结构</th>
+                  <th>净支出</th>
+                  <th>预期收益</th>
+                  <th>最大亏损</th>
+                  <th>风险收益比</th>
+                  <th>平衡点宽度</th>
+                  <th>特点</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expertAdvice.candidates.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.title}</td>
+                    <td>{c.structureLabel}</td>
+                    <td className="pnl-negative">{fmtMoney(c.netDebit)}</td>
+                    <td className={c.projectedProfit >= 0 ? 'pnl-positive' : 'pnl-negative'}>{fmtMoney(c.projectedProfit)}</td>
+                    <td className="pnl-negative">{fmtMoney(c.maxLoss)}</td>
+                    <td>{c.rewardRisk.toFixed(2)}</td>
+                    <td>{c.breakevenWidth !== null ? c.breakevenWidth.toFixed(strikeDec) : '—'}</td>
+                    <td className="plan-note">{c.note}</td>
+                    <td>
+                      {isExpertApplicable(c) ? (
+                        <button className="btn btn-small" onClick={() => applyExpertCandidate(c)}>应用</button>
+                      ) : (
+                        <span className="text-muted">仅参考</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
         {/* ============ 收窄平衡点方案对比 ============ */}
         <div className="order-section">
           <h3>🔧 收窄盈亏平衡点 · 方案对比</h3>

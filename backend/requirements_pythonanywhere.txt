@@ -1,0 +1,8 @@
+# PythonAnywhere minimal deps (free-tier friendly)
+# wsgi_app.py only strictly requires requests; akshare/yfinance are optional
+# data sources - if install fails, app auto-falls back to simulated data.
+requests>=2.31.0
+
+# Optional enhancements (safe to skip):
+# akshare>=1.18.0
+# yfinance>=0.2.30
